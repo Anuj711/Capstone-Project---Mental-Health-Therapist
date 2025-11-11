@@ -1,2 +1,8 @@
 venv
+.venv
+my_311_venv
 *__pycache__
+.pytest_cache
+.env
+app/static/user_videos
+app/static/.DS_Store

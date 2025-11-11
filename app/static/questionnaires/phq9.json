@@ -1,0 +1,40 @@
+{
+    "name": "PHQ-9",
+    "time_window": "Over the last 2 weeks",
+    "response_options": [
+        { "label": "Not at all", "value": 0 },
+        { "label": "Several days", "value": 1 },
+        { "label": "More than half the days", "value": 2 },
+        { "label": "Nearly every day", "value": 3 }
+    ],
+    "questions": [
+        { "id": 1, "text": "Little interest or pleasure in doing things" },
+        { "id": 2, "text": "Feeling down, depressed, or hopeless" },
+        { "id": 3, "text": "Trouble falling or staying asleep, or sleeping too much" },
+        { "id": 4, "text": "Feeling tired or having little energy" },
+        { "id": 5, "text": "Poor appetite or overeating" },
+        { "id": 6, "text": "Feeling bad about yourself — or that you are a failure or have let yourself or your family down" },
+        { "id": 7, "text": "Trouble concentrating on things, such as reading the newspaper or watching television" },
+        { "id": 8, "text": "Moving or speaking so slowly that other people could have noticed? Or the opposite — being so fidgety or restless that you have been moving around a lot more than usual" },
+        { "id": 9, "text": "Thoughts that you would be better off dead or of hurting yourself in some way" }
+    ],
+    "functional_impairment": {
+        "text": "If you checked off any problems, how difficult have these problems made it for you to do your work, take care of things at home, or get along with other people?",
+        "response_options": [
+            { "label": "Not difficult at all", "value": 0 },
+            { "label": "Somewhat difficult", "value": 1 },
+            { "label": "Very difficult", "value": 2 },
+            { "label": "Extremely difficult", "value": 3 }
+        ]
+    },
+    "scoring": {
+        "total_score_range": { "min": 0, "max": 27 },
+        "interpretation": [
+        { "range": [0,4], "severity": "None-minimal" },
+        { "range": [5,9], "severity": "Mild" },
+        { "range": [10,14], "severity": "Moderate" },
+        { "range": [15,19], "severity": "Moderately severe" },
+        { "range": [20,27], "severity": "Severe" }
+        ]
+    }
+}
