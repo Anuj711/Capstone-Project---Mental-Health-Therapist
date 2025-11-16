@@ -1,0 +1,38 @@
+{
+    "name": "PCL-5",
+    "time_window": "In the past month",
+    "response_options": [
+      { "label": "Not at all", "value": 0 },
+      { "label": "A little bit", "value": 1 },
+      { "label": "Moderately", "value": 2 },
+      { "label": "Quite a bit", "value": 3 },
+      { "label": "Extremely", "value": 4 }
+    ],
+    "questions": [
+      { "id": 1, "text": "Repeated, disturbing, and unwanted memories of the stressful experience?" },
+      { "id": 2, "text": "Repeated, disturbing dreams of the stressful experience?" },
+      { "id": 3, "text": "Suddenly feeling or acting as if the stressful experience were actually happening again (as if you were actually back there reliving it)?" },
+      { "id": 4, "text": "Feeling very upset when something reminded you of the stressful experience?" },
+      { "id": 5, "text": "Having strong physical reactions when something reminded you of the stressful experience (for example, heart pounding, trouble breathing, sweating)?" },
+      { "id": 6, "text": "Avoiding memories, thoughts, or feelings related to the stressful experience?" },
+      { "id": 7, "text": "Avoiding external reminders of the stressful experience (for example, people, places, conversations, activities, objects, or situations)?" },
+      { "id": 8, "text": "Trouble remembering important parts of the stressful experience?" },
+      { "id": 9, "text": "Having strong negative beliefs about yourself, other people, or the world (for example, having thoughts such as: I am bad, there is something seriously wrong with me, no one can be trusted, the world is completely dangerous)?" },
+      { "id": 10, "text": "Blaming yourself or someone else for the stressful experience or what happened after it?" },
+      { "id": 11, "text": "Having strong negative feelings such as fear, horror, anger, guilt, or shame?" },
+      { "id": 12, "text": "Loss of interest in activities that you used to enjoy?" },
+      { "id": 13, "text": "Feeling distant or cut off from other people?" },
+      { "id": 14, "text": "Trouble experiencing positive feelings (for example, being unable to feel happiness or have loving feelings for people close to you)?" },
+      { "id": 15, "text": "Irritable behaviour, angry outbursts, or acting aggressively?" },
+      { "id": 16, "text": "Taking too many risks or doing things that could cause you harm?" },
+      { "id": 17, "text": "Being 'superalert', watchful, or on guard?" },
+      { "id": 18, "text": "Feeling jumpy or easily startled?" },
+      { "id": 19, "text": "Having difficulty concentrating?" },
+      { "id": 20, "text": "Trouble falling or staying asleep?" }
+    ],
+    "scoring": {
+      "total_score_range": { "min": 0, "max": 80 },
+      "notes": "For a provisional PTSD diagnosis in DSM-5: at least 1 symptom in Criterion B (items 1-5), at least 1 in Criterion C (items 6-7), at least 2 in Criterion D (items 8-14), and at least 2 in Criterion E (items 15-20) each rated ‘moderately’ (2) or higher. Some research uses a cutoff score of ~31-33 for probable PTSD in some populations."
+    }
+  }
+  
