@@ -1,0 +1,11 @@
+[
+    {
+      "origin": [
+        "https://9000-firebase-studio-1760222919475.cluster-5qqttngu5jb5axkv76meuavb2c.cloudworkstations.dev",
+        "https://studio-6533424125-c5338.web.app",
+        "https://studio-6533424125-c5338.firebaseapp.com"
+      ],
+      "method": ["GET", "POST", "PUT", "DELETE"],
+      "maxAgeSeconds": 3600
+    }
+  ]

@@ -1,0 +1,13 @@
+{
+    "name": "GAD-7",
+    "questions": [
+        { "id": 1, "text": "Feeling nervous, anxious, or on edge" },
+        { "id": 2, "text": "Not being able to stop or control worrying" },
+        { "id": 3, "text": "Worrying too much about different things" },
+        { "id": 4, "text": "Trouble relaxing" },
+        { "id": 5, "text": "Being so restless that it is hard to sit still" },
+        { "id": 6, "text": "Becoming easily annoyed or irritable" },
+        { "id": 7, "text": "Feeling afraid as if something awful might happen" }
+    ]
+}
+  

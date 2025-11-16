@@ -1,0 +1,70 @@
+/**
+ * @fileoverview Firestore Security Rules for Mindful Journey application.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model for all data. Each user has exclusive access to their user profile, journal entries, and chat messages.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores user profile data. The userId corresponds to the Firebase Authentication UID.
+ * - /users/{userId}/journalEntries/{journalEntryId}: Stores journal entries for each user.
+ * - /users/{userId}/sessions/{sessionId}/messages/{messageId}: Stores chat messages for each user, organized by session.
+ *
+ * Key Security Decisions:
+ * - User data is strictly private and only accessible to the authenticated user.
+ * - Listing of users is disallowed.
+ *
+ * Denormalization for Authorization:
+ *  - The data structure inherently denormalizes the user ID into the document paths, enabling efficient path-based authorization.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // isSignedIn() checks if the request is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // isOwner(userId) checks if the authenticated user's UID matches the provided userId.
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Listing users is not permitted.
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isOwner(userId);
+
+      match /journalEntries/{journalEntryId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /sessions/{sessionId} {
+        allow read, write: if isOwner(userId);
+
+        match /messages/{messageId} {
+          allow read, write: if isOwner(userId);
+        }
+      }
+      match /sessions/{sessionId} {
+        allow read, write: if isOwner(userId);
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        match /messages/{messageId} {
+          allow read, write: if isOwner(userId);
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+
+        match /questions/{questionId} {
+          allow read, write: if isOwner(userId);
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+      
+
+    }
+    
+  }
+}

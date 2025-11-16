@@ -1,0 +1,178 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the Mindful Journey application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "googleId": {
+          "type": "string",
+          "description": "The unique identifier from Google, if the user authenticated with Google."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The date and time when the user account was created.",
+          "format": "date-time"
+        },
+        "lastLogin": {
+          "type": "string",
+          "description": "The date and time of the user's last login.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt"
+      ]
+    },
+    "JournalEntry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "JournalEntry",
+      "type": "object",
+      "description": "Represents a journal entry created by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the journal entry."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N JournalEntry)"
+        },
+        "date": {
+          "type": "string",
+          "description": "The date when the journal entry was created.",
+          "format": "date"
+        },
+        "mood": {
+          "type": "string",
+          "description": "The user's mood at the time of the journal entry (e.g., happy, sad, anxious)."
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content of the journal entry."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "date",
+        "mood",
+        "text"
+      ]
+    },
+    "ChatMessage": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ChatMessage",
+      "type": "object",
+      "description": "Represents a message exchanged in the chatbot conversation.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the chat message."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N ChatMessage)"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The date and time when the message was sent.",
+          "format": "date-time"
+        },
+        "sender": {
+          "type": "string",
+          "description": "Indicates who sent the message ('user' or 'bot')."
+        },
+        "text": {
+          "type": "string",
+          "description": "The text content of the chat message."
+        },
+        "mediaUrl": {
+          "type": "string",
+          "description": "URL of any media file attached to the message (image, audio, video).",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "timestamp",
+        "sender",
+        "text"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile data. The userId is the Firebase Authentication UID.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The Firebase Authentication UID of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/journalEntries/{journalEntryId}",
+        "definition": {
+          "entityName": "JournalEntry",
+          "schema": {
+            "$ref": "#/backend/entities/JournalEntry"
+          },
+          "description": "Stores journal entries for each user.  Secured via path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The Firebase Authentication UID of the user who owns the journal entries."
+            },
+            {
+              "name": "journalEntryId",
+              "description": "The unique identifier for the journal entry."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/chatMessages/{chatMessageId}",
+        "definition": {
+          "entityName": "ChatMessage",
+          "schema": {
+            "$ref": "#/backend/entities/ChatMessage"
+          },
+          "description": "Stores chat messages for each user. Secured via path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The Firebase Authentication UID of the user who owns the chat messages."
+            },
+            {
+              "name": "chatMessageId",
+              "description": "The unique identifier for the chat message."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure data security, scalability, and ease of debugging, adhering to the core design principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), and QAPs (Rules are not Filters). It also adheres to the principle that all documents in a single collection must share a homogeneous security posture.\n\n**Authorization Independence:**  The structure avoids hierarchical authorization dependencies (`get()` calls in security rules) by employing path-based ownership for user-specific data.  The `JournalEntry` and `ChatMessage` collections are structured as subcollections of the `/users/{userId}` collection. This ensures that access control can be enforced based on the `request.auth.uid` matching the `{userId}` in the path, without needing to read parent documents.\n\n**Clarity of Intent:** The structure clearly reflects ownership.  Each user has their journal entries and chat messages nested under their respective user ID, which immediately communicates the data's ownership and access restrictions.\n\n**DBAC (No Custom Claims):** The application uses Firebase Authentication and relies solely on `request.auth.uid` for authentication. There are no custom claims involved, and all authorization information is derived directly from the authentication token and Firestore data structure.\n\n**QAPs (Rules are not Filters):**  The path-based ownership ensures secure `list` operations.  A user can only `list` journal entries and chat messages within their own `/users/{userId}` path, as enforced by the security rules. This prevents unauthorized listing of data.\n\n**Invariants:** The structure supports the integrity of ownership. The `userId` field in both `JournalEntry` and `ChatMessage` documents links back to the owning user. Timestamps such as `createdAt` and `timestamp` can be enforced via rules to ensure they are only set on creation. While there's no denormalized data in this structure, the chosen ownership model makes denormalization unnecessary for authorization, maintaining data integrity and simplifying rules."
+  }
+}
