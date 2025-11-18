@@ -6,9 +6,11 @@ from app.services.assembly_ai import analyze_audio
 from app.services.deepface_service import analyze_video
 from app.utils.safety_check import check_trigger_words
 from app.services.openai_client import call_openai_therapy_model
+from flask_cors import CORS
 
 load_dotenv()
 app = Flask(__name__)
+CORS(app)
 
 def prepare_data_for_json(data):
     """Recursively converts NumPy/custom numeric types to standard Python types."""
