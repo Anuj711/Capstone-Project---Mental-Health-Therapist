@@ -21,7 +21,7 @@
    _npm run dev_
 
 
-**Troubleshooting Commands:**
+**Troubleshooting commands:**
 1. To update an outdated version of Next.js:
    _npm i next@canary_
 
