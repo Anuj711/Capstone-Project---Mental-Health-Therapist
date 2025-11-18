@@ -4,7 +4,8 @@
 3. Open a terminal and navigate to the "backend" directory.
 4. In the terminal, run the "run.bat" file:
    _.\run.bat_
-   5
+
+   
 **To start the frontend and database server:**
 1. Obtain the appropriate "service-account.json" and ".env" files (available on request).
 2. Place the "service-account.json" and ".env" files in the "/frontend_and_database" directory.
