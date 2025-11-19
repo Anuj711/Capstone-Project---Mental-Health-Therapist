@@ -1,16 +1,7 @@
 'use client';
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
-  SidebarTrigger,
-} from '@/components/ui/sidebar';
 import { AppLogo } from '@/components/icons';
 import { MainNav } from '@/components/dashboard/main-nav';
 import { UserNav } from '@/components/dashboard/user-nav';
-import { Separator } from '@/components/ui/separator';
 import { useState, useEffect } from 'react';
 
 export default function AppLayout({
@@ -25,39 +16,34 @@ export default function AppLayout({
   }, []);
 
   if (!isMounted) {
-    return null; // Or a loading spinner
+    return null;
   }
   
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen">
-        <Sidebar collapsible="icon">
-          <SidebarHeader>
-            <div className="flex items-center gap-2">
-              <AppLogo className="w-8 h-8 text-primary" />
-              <span className="text-lg font-semibold font-headline">Mental Health Therapist</span>
+    <div className="min-h-screen bg-brandPrimary">
+      {/* Top Navigation Bar */}
+      <header className="h-20 border-b border-gray-200 bg-white/70 backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-6 h-full flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-textPrimary flex items-center justify-center">
+              <AppLogo className="w-6 h-6 text-white" />
             </div>
-          </SidebarHeader>
-          <SidebarContent>
-            <MainNav />
-          </SidebarContent>
-          <Separator className="my-2" />
-          <SidebarFooter>
-            <UserNav />
-          </SidebarFooter>
-        </Sidebar>
-        <div className="flex-1 flex flex-col">
-          <header className="flex h-14 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 md:px-6 sticky top-0 z-30">
-            <div className="md:hidden">
-              <SidebarTrigger />
-            </div>
-            <div className="flex-1">
-              {/* You can add a page title here if needed */}
-            </div>
-          </header>
-          <main className="flex-1 p-4 md:p-8 overflow-auto">{children}</main>
+            <span className="text-xl font-bold text-gray-700">Mental Health Therapist</span>
+          </div>
+          
+          {/* Main Navigation */}
+          <MainNav />
+          
+          {/* User Actions */}
+          <UserNav />
         </div>
-      </div>
-    </SidebarProvider>
+      </header>
+      
+      {/* Main Content */}
+      <main className="container mx-auto px-6 py-8">
+        {children}
+      </main>
+    </div>
   );
 }

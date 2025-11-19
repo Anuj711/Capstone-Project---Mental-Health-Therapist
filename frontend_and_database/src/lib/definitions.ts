@@ -23,6 +23,7 @@ export type ChatMessage = {
   text?: string;
   mediaUrl?: string; // for displaying on the client
   mediaMimeType?: string; // for displaying on the client
+  timestamp: any; // Allow serverTimestamp
   classification?: {
     ptsdSymptoms: string[];
     gadSymptoms: string[];

@@ -1,7 +1,7 @@
 import type {Config} from 'tailwindcss';
 
 export default {
-  darkMode: ['class'],
+  darkMode: ['class', '[data-theme="dark"]'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -10,8 +10,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['PT Sans', 'sans-serif'],
-        headline: ['PT Sans', 'sans-serif'],
+        body: ['var(--font-inter)','PT Sans', 'sans-serif'],
+        headline: ['var(--font-inter)','PT Sans', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {
@@ -65,6 +65,9 @@ export default {
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))',
         },
+        brandPrimary: '#E4EAFF',
+        textPrimary: '#6C65C4',
+        textSecondary: '#423A93',
       },
       borderRadius: {
         lg: 'var(--radius)',
