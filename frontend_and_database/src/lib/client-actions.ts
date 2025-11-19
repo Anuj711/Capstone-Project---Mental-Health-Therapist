@@ -1,6 +1,6 @@
 'use client';
 
-import { getFirestore, collection, doc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, doc, deleteDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Message } from '@/types/messages';
@@ -19,6 +19,34 @@ export async function deleteJournalEntryClient(userId: string, entryId: string) 
     return { success: true, message: 'Journal entry deleted successfully.' };
   } catch (error) {
     console.error('Error deleting entry:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error occurred.';
+    return { success: false, message };
+  }
+}
+
+/**
+ * Updates a journal entry using the client Firestore SDK.
+ * This runs safely in the browser as long as Firestore security rules
+ * ensure users can only update their own data.
+ */
+export async function updateJournalEntryClient(
+  userId: string,
+  entryId: string,
+  data: { content: string; mood: string }
+) {
+  try {
+    const db = getFirestore(getApp());
+    const entryRef = doc(db, `users/${userId}/journalEntries/${entryId}`);
+    
+    await updateDoc(entryRef, {
+      content: data.content,
+      mood: data.mood,
+      updatedAt: serverTimestamp(),
+    });
+
+    return { success: true, message: 'Entry updated successfully' };
+  } catch (error) {
+    console.error('Error updating journal entry:', error);
     const message = error instanceof Error ? error.message : 'Unknown error occurred.';
     return { success: false, message };
   }
@@ -81,4 +109,3 @@ export async function sendFileUrlToPythonAPI(session_id: string, user_id: string
       throw error;
     }
   }
-

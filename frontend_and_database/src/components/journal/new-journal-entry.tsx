@@ -57,7 +57,7 @@ export function NewJournalEntry() {
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const { user } = useUser();
 
-  const [state, formAction] = useActionState(createJournalEntry, { message: '', errors: {} });
+  const [state, formAction] = useActionState(createJournalEntry, { message: '', errors: {}, success: false });
 
   const form = useForm<NewEntryFormState>({
     resolver: zodResolver(NewEntrySchema),
@@ -100,20 +100,20 @@ export function NewJournalEntry() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button disabled={!user}>
+        <Button disabled={!user} className="bg-textPrimary hover:bg-textPrimary/90 text-white">
           <PlusCircle className="mr-2 h-4 w-4" /> New Entry
         </Button>
       </SheetTrigger>
-      <SheetContent className="sm:max-w-lg w-[90vw] flex flex-col">
+        <SheetContent className="sm:max-w-lg w-[90vw] flex flex-col">
         <SheetHeader>
           <SheetTitle className="font-headline">How are you feeling?</SheetTitle>
           <SheetDescription>
             Take a moment to write down your thoughts. Don't worry about grammar or spelling.
           </SheetDescription>
         </SheetHeader>
-        <form action={onFormAction} className="flex-1 flex flex-col gap-6 py-4">
+        <form action={onFormAction} className="flex-1 flex flex-col gap-6 py-4 overflow-y-auto">
           <input type="hidden" name="userId" value={user?.uid || ''} />
-          <div className="grid gap-2">
+          <div className="grid gap-2 px-1">
             <Label>How are you feeling right now?</Label>
             <div className="flex gap-2 flex-wrap">
               {MOODS.map((mood) => (
@@ -125,7 +125,7 @@ export function NewJournalEntry() {
                     form.setValue('mood', mood, { shouldValidate: true });
                   }}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-2 p-3 rounded-lg border-2 w-20 h-20 transition-all",
+                    "flex flex-col items-center justify-center gap-2 p-3 rounded-lg border-2 w-20 h-20 transition-all flex-shrink-0",
                     selectedMood === mood
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-transparent bg-muted/50 hover:bg-muted"
@@ -139,24 +139,25 @@ export function NewJournalEntry() {
             {form.formState.errors.mood && <p className="text-sm font-medium text-destructive">{form.formState.errors.mood.message}</p>}
           </div>
 
-          <div className="grid gap-2 flex-1">
+          <div className="grid gap-2 px-1">
             <Label htmlFor="content">Your thoughts</Label>
             <Textarea
               id="content"
               name="content"
               placeholder="Start writing here..."
-              className="min-h-[200px] flex-1 resize-none"
+              className="min-h-[200px] resize-none"
               onChange={(e) => form.setValue('content', e.target.value, { shouldValidate: true })}
             />
             {form.formState.errors.content && <p className="text-sm font-medium text-destructive">{form.formState.errors.content.message}</p>}
           </div>
-          
-          <SheetFooter>
-            <SheetClose asChild>
-                <Button variant="outline">Cancel</Button>
-            </SheetClose>
-            <SubmitButton />
-          </SheetFooter>
+        
+        
+        <SheetFooter>
+          <SheetClose asChild>
+              <Button variant="outline">Cancel</Button>
+          </SheetClose>
+          <SubmitButton />
+        </SheetFooter>
         </form>
       </SheetContent>
     </Sheet>

@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 body {
-  font-family: 'PT Sans', sans-serif;
+  font-family: 'inter','PT Sans', sans-serif;
 }
+
 
 @layer base {
   :root {
