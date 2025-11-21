@@ -86,7 +86,7 @@ def analyze_turn():
 
     # Step 2: Call OpenAI model --> gives all diagnosis and chatbot response 
     model_output = call_openai_therapy_model(assembly_data, deepface_data, questionnaires, past_turns)
-
+    
     # Step 3: Return final JSON for Firestore & frontend
     # Reference this for details https://docs.google.com/document/d/1puUwAbnJJj2ewmRC75_HooBzAynsvHOO6uR1tnbGAAM/edit?tab=t.0#heading=h.2jed7gsbkiph ("backend returns:") 
     response_payload = {

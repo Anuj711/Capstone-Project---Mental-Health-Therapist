@@ -4,6 +4,8 @@ import { ChatLayout } from '@/components/chat/chat-layout';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
+import { useRouter } from 'next/navigation';
+import { Session } from '@/lib/definitions';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -24,20 +26,29 @@ import { Button } from '@/components/ui/button';
 import { SidebarHeader } from '@/components/chat/SidebarHeader';
 import { SessionsList } from '@/components/chat/SessionsList';
 import { useSessionManagement } from '@/hooks/useSessionManagement';
+import { resumeSession } from '@/lib/actions';
+
+/*uncomment to test session summary generation*/
+//import { resumeSession, generateSessionSummary } from '@/lib/actions';
+//import { FileText, Loader2 } from 'lucide-react';
 
 export default function ChatPageClient({
   deleteChatSession,
-  renameChatSession
+  renameChatSession,
+  endSessionManually,
 }: {
   deleteChatSession: (userId: string, sessionId: string) => any;
   renameChatSession: (userId: string, sessionId: string, newName: string) => any;
+  endSessionManually: (userId: string, sessionId: string) => any;
 }) {
   const { user } = useUser();
   const { toast } = useToast();
+  const router = useRouter();
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [tempSessionName, setTempSessionName] = useState('');
   const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   const {
     activeSessionId,
@@ -48,6 +59,53 @@ export default function ChatPageClient({
     handleNewSession,
   } = useSessionManagement();
 
+  const typedSessions = sessions ? sessions as Session[] : undefined;
+
+  {/*uncomment to test session summary generation*/}
+  /*
+  // TEST FUNCTION - Generate summary manually
+  const handleGenerateSummary = async () => {
+    if (!user || !activeSessionId) {
+      toast({
+        title: 'Error',
+        description: 'No active session',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setGeneratingSummary(true);
+    try {
+      const result = await generateSessionSummary(user.uid, activeSessionId);
+      
+      if (result.success) {
+        toast({
+          title: 'Summary Generated',
+          description: 'Redirecting to summary page...',
+        });
+        setTimeout(() => {
+          router.push(`/session-summary/${activeSessionId}`);
+        }, 500);
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'Failed to generate summary',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate summary',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+  
+*/
   const handleDeleteConfirm = async () => {
     if (!sessionToDelete || !user) return;
 
@@ -56,7 +114,7 @@ export default function ChatPageClient({
     if (result.success) {
       toast({ title: "Session deleted", description: "The session has been removed." });
       if (activeSessionId === sessionToDelete) {
-        const remainingSessions = sessions?.filter(s => s.id !== sessionToDelete);
+        const remainingSessions = typedSessions?.filter(s => s.id !== sessionToDelete);
         setActiveSessionId(remainingSessions && remainingSessions.length > 0 ? remainingSessions[0].id : null);
       }
     } else {
@@ -69,13 +127,26 @@ export default function ChatPageClient({
     setShowEndSessionDialog(true);
   };
 
-  const handleEndSessionConfirm = () => {
-    toast({
-      title: "Session Ended",
-      description: "Your therapy session has been concluded. You can start a new one anytime.",
-    });
-    setShowEndSessionDialog(false);
-    handleNewSession();
+  const handleEndSessionConfirm = async () => {
+    if (!user || !activeSessionId) return;
+
+    const result = await endSessionManually(user.uid, activeSessionId);
+
+    if (result.success) {
+      toast({
+        title: "Session Ended",
+        description: "Your therapy session has been concluded.",
+      });
+      setShowEndSessionDialog(false);
+      router.push(`/session-summary/${activeSessionId}`);
+    } else {
+      toast({
+        title: "Error",
+        description: result.message,
+        variant: 'destructive',
+      });
+      setShowEndSessionDialog(false);
+    }
   };
 
   const handleRename = (session: { id: string; name: string }) => {
@@ -98,7 +169,7 @@ export default function ChatPageClient({
       return;
     }
     
-    const nameExists = sessions?.some(
+    const nameExists = typedSessions?.some(
       s => s.id !== editingSessionId && s.name.toLowerCase() === trimmedName.toLowerCase()
     );
     
@@ -125,78 +196,64 @@ export default function ChatPageClient({
     setEditingSessionId(null);
     setTempSessionName('');
   };
+
+  const handleResume = async (sessionId: string) => {
+    if (!user) return;
+    
+    const result = await resumeSession(user.uid, sessionId);
+    
+    if (result.success) {
+      toast({
+        title: 'Session Resumed',
+        description: 'You can now continue your conversation.',
+      });
+      setActiveSessionId(sessionId);
+    } else {
+      toast({
+        title: 'Error',
+        description: result.message || 'Failed to resume session',
+        variant: 'destructive',
+      });
+    }
+  };
   
-  const canDelete = sessions ? sessions.length > 1 : false;
+  const canDelete = typedSessions ? typedSessions.length > 1 : false;
 
   return (
     <>
-      <AlertDialog>
-        <div className="h-full w-full grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-0">
-          {/* Left Sidebar */}
-          <div className="hidden lg:flex flex-col w-[300px] h-full gap-4 overflow-hidden border-r">
-            <SidebarHeader onEndSession={handleEndSession} />
-            
-            <SessionsList
-              sessions={sessions}
-              sessionsLoading={sessionsLoading}
-              activeSessionId={activeSessionId}
-              editingSessionId={editingSessionId}
-              tempSessionName={tempSessionName}
-              canDelete={canDelete}
-              onSelectSession={setActiveSessionId}
-              onNewSession={handleNewSession}
-              onRename={handleRename}
-              onRenameChange={setTempSessionName}
-              onRenameSubmit={handleRenameSubmit}
-              onRenameCancel={handleRenameCancel}
-              onDelete={setSessionToDelete}
-            />
-          </div>
-
-          {/* Main Chat Area */}
-          <div className="h-full w-full flex flex-col min-h-0">
-            {activeSessionId ? (
-              <ChatLayout 
-                sessionId={activeSessionId} 
-                sessionName={activeSession?.name || ''} 
-                key={activeSessionId} 
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">Loading or creating session...</p>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Delete Session Dialog */}
+      <AlertDialog open={!!sessionToDelete} onOpenChange={(open) => !open && setSessionToDelete(null)}>
         <AlertDialogContent>
-          {sessionToDelete && (
-            <>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Session?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete this chat session and all its messages.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <Button onClick={() => setSessionToDelete(null)}>Cancel</Button>
-                <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
-                  Delete
-                </Button>
-              </AlertDialogFooter>
-            </>
-          )}
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete this chat session and all its messages.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button onClick={() => setSessionToDelete(null)} variant="outline">Cancel</Button>
+            <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </Button>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* End Session Dialog */}
       <Dialog open={showEndSessionDialog} onOpenChange={setShowEndSessionDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>End Therapy Session?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to end this session? Your conversation will be saved, and you can start a new session anytime.
+              {activeSession?.status === 'active' && activeSession?.completionPercentage === 100 ? (
+                <>
+                  You've completed all diagnostic questions! Ending now will save your progress and generate your summary.
+                  You can resume this session later for free-talk.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to end this session? You haven't completed all diagnostic questions yet.
+                  Your progress will be saved, and you can resume or start a new session anytime.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -209,13 +266,84 @@ export default function ChatPageClient({
             <Button 
               variant="default"
               onClick={handleEndSessionConfirm}
-              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               End Session
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div className="h-screen w-full flex overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="hidden lg:flex flex-col w-[300px] h-full border-r bg-gray-50 overflow-y-auto">
+          <div className="flex-shrink-0 py-4">
+            <SidebarHeader 
+              onEndSession={handleEndSession}
+              sessionStatus={activeSession?.status}
+            />
+            
+            {/* TEST BUTTON - uncomment to test session summary generation */}
+            {/*}
+            <div className="px-4 mt-4">
+              <Button
+                onClick={handleGenerateSummary}
+                disabled={generatingSummary || !activeSessionId}
+                className="w-full bg-orange-600 hover:bg-orange-700"
+                size="sm"
+              >
+                {generatingSummary ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    [TEST] Generate Summary
+                  </>
+                )}
+              </Button>
+            </div>
+            */}
+          </div>
+          
+          
+          <div className="flex-1 min-h-[400px] pb-4">
+            <SessionsList
+              sessions={typedSessions}
+              sessionsLoading={sessionsLoading}
+              activeSessionId={activeSessionId}
+              editingSessionId={editingSessionId}
+              tempSessionName={tempSessionName}
+              canDelete={canDelete}
+              onSelectSession={setActiveSessionId}
+              onNewSession={handleNewSession}
+              onRename={handleRename}
+              onRenameChange={setTempSessionName}
+              onRenameSubmit={handleRenameSubmit}
+              onRenameCancel={handleRenameCancel}
+              onDelete={setSessionToDelete}
+              onResume={handleResume}
+            />
+          </div>
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 h-full overflow-hidden">
+          {activeSessionId ? (
+            <ChatLayout 
+              sessionId={activeSessionId} 
+              sessionName={activeSession?.name || ''} 
+              key={activeSessionId} 
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500">Loading or creating session...</p>
+            </div>
+          )}
+        </div>
+      </div>
     </>
   );
 }

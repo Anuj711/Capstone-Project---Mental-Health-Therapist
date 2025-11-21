@@ -39,7 +39,7 @@ export function SignupForm() {
   };
 
   return (
-    <form onSubmit={handleSignup} className="space-y-4 w-full">
+    <form onSubmit={handleSignup} className="space-y-6 w-full">
       {/* Email input */}
       <div className="relative">
         <input
@@ -50,7 +50,7 @@ export function SignupForm() {
           required
           onFocus={() => setFocusedField('email')}
           onBlur={() => setFocusedField(null)}
-          className="w-full px-5 py-2 rounded-2xl bg-white/40 backdrop-blur-xl border-2 border-white/50
+          className="w-full px-5 py-2 text-sm rounded-2xl bg-white/40 backdrop-blur-xl border-2 border-white/50
             text-gray-900 placeholder:text-gray-500 focus:outline-none focus:border-purple-400
             focus:bg-white/60 transition-all shadow-lg"
         />
@@ -70,7 +70,7 @@ export function SignupForm() {
           required
           onFocus={() => setFocusedField('password')}
           onBlur={() => setFocusedField(null)}
-          className="w-full px-5 py-2 rounded-2xl bg-white/40 backdrop-blur-xl border-2 border-white/50
+          className="w-full px-5 py-2 text-sm rounded-2xl bg-white/40 backdrop-blur-xl border-2 border-white/50
             text-gray-900 placeholder:text-gray-500 focus:outline-none focus:border-purple-400
             focus:bg-white/60 transition-all shadow-lg"
         />
@@ -84,7 +84,7 @@ export function SignupForm() {
       <button
         type="submit"
         disabled={isLoading}
-        className="group w-full py-2 rounded-2xl bg-textSecondary text-white font-semibold
+        className="group w-full py-2 text-sm rounded-2xl bg-textSecondary text-white font-semibold
           flex items-center justify-center gap-2 hover:shadow-2xl hover:scale-[1.02]
           transition-all duration-300 disabled:opacity-50"
       >
@@ -109,12 +109,17 @@ export function SignupForm() {
       </div>
 
       {/* Sign in link */}
-      <p className="text-center text-sm text-gray-700">
+      <p className="text-center text-xs text-gray-700">
         Already have an account?{' '}
         <a href="/login" className="text-textSecondary font-semibold inline-flex items-center hover:underline">
           Sign in
         </a>
       </p>
+
+      <p className="text-xs text-center pt-2 text-gray-600 leading-relaxed">
+        By creating an account, you agree to our Terms of Service and Privacy Policy. 
+      </p>
+              
     </form>
   );
 }

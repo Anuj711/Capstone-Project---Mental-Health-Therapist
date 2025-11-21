@@ -16,8 +16,8 @@ export function MoodAnalysisCard({ moodData }: MoodAnalysisCardProps) {
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle className="text-xl text-gray-700">Mood Analysis</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-lg text-gray-700">Mood Analysis</CardTitle>
+        <CardDescription className="text-xs">
           A summary of your logged moods over time.
         </CardDescription>
       </CardHeader>

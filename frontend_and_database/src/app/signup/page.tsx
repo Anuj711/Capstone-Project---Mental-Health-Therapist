@@ -58,13 +58,13 @@ export default function SignupPage() {
           
           <div className="space-y-3">
             <h1 
-              className="text-4xl font-bold leading-tight tracking-tight"
+              className="text-2xl font-bold leading-tight tracking-tight max-w-sm"
               style={{ color: themeColors.textSecondary }}
             >
               Your Journey Towards Clarity Starts Here
             </h1>
             <p 
-              className="text-base leading-relaxed max-w-sm mx-auto lg:mx-0 font-light"
+              className="text-sm leading-relaxed max-w-sm mx-auto lg:mx-0 font-light"
               style={{ color: 'rgba(0, 0, 0, 0.6)' }}
             >
               Evidence-based support, compassionate guidance, and tools to help you thrive - available whenever you need it.
@@ -79,7 +79,7 @@ export default function SignupPage() {
               { value: 'Free', label: 'To Use' },
             ].map((stat, idx) => (
               <div key={idx} className="text-center lg:text-left">
-                <div className="text-xl font-bold text-textSecondary" >
+                <div className="text-lg font-bold text-textSecondary" >
                   {stat.value}
                 </div>
                 <div className="text-xs font-medium mt-0.5" style={{ color: 'rgba(0, 0, 0, 0.5)' }}>
@@ -107,7 +107,7 @@ export default function SignupPage() {
             <div className="space-y-5 max-w-sm mx-auto">
               {/* Header */}
               <div className="space-y-2 py-4 text-center">
-                <h2 className="text-3xl font-bold text-textSecondary">
+                <h2 className="text-2xl font-bold text-textSecondary">
                   Create an account
                 </h2>
                 <p className="text-sm text-gray-700">
@@ -117,11 +117,7 @@ export default function SignupPage() {
 
               <SignupForm />
 
-              <div className="pt-4 border-t border-gray-400/20">
-                <p className="text-xs text-center text-gray-600 leading-relaxed">
-                  By creating an account, you agree to our Terms of Service and Privacy Policy. 
-                </p>
-              </div>
+              
             </div>
           </div>
         </div>
