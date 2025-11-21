@@ -63,7 +63,7 @@ export function LoginForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-5 py-2 rounded-2xl bg-white/40 backdrop-blur-xl
+          className="w-full px-5 py-2 text-sm rounded-2xl bg-white/40 backdrop-blur-xl
             border-2 border-white/50 text-gray-900 placeholder:text-gray-500
             focus:outline-none focus:border-purple-400 focus:bg-white/60
             transition-all shadow-lg text-base"
@@ -78,7 +78,7 @@ export function LoginForm() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-5 py-2 rounded-2xl bg-white/40 backdrop-blur-xl
+          className="w-full px-5 py-2 text-sm rounded-2xl bg-white/40 backdrop-blur-xl
             border-2 border-white/50 text-gray-900 placeholder:text-gray-500
             focus:outline-none focus:border-purple-400 focus:bg-white/60
             transition-all shadow-lg text-base"
@@ -89,7 +89,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isLoading || isGoogleLoading}
-        className="w-full py-2 rounded-2xl bg-textSecondary text-white font-semibold
+        className="w-full py-2 rounded-2xl text-sm bg-textSecondary text-white font-semibold
           flex items-center justify-center gap-2 hover:shadow-2xl hover:scale-[1.02]
           transition-all duration-300 disabled:opacity-50"
       >
@@ -102,7 +102,7 @@ export function LoginForm() {
         type="button"
         onClick={handleGoogleLogin}
         disabled={isLoading || isGoogleLoading}
-        className="w-full py-2 rounded-2xl bg-white/40 text-gray-900 font-semibold
+        className="w-full py-2 rounded-2xl text-sm bg-white/40 text-gray-900 font-semibold
           flex items-center justify-center gap-2 hover:shadow-xl hover:scale-[1.02]
           transition-all duration-300 disabled:opacity-50"
       >
@@ -111,7 +111,7 @@ export function LoginForm() {
       </button>
 
       {/* Sign up link */}
-      <p className="text-center text-sm text-gray-700">
+      <p className="text-center text-xs text-gray-700">
         Don&apos;t have an account?{' '}
         <Link href="/signup" className="text-textSecondary font-semibold hover:underline">
           Sign up

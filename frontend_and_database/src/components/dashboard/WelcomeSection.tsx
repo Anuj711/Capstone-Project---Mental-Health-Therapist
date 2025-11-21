@@ -6,10 +6,10 @@ export function WelcomeSection() {
 
   return (
     <div>
-      <h1 className="text-4xl font-bold text-gray-700">
+      <h1 className="text-2xl font-bold text-gray-700">
         {getGreeting()}, {getUserFirstName(user?.displayName, user?.email)}
       </h1>
-      <p className="text-gray-600 mt-2">
+      <p className="text-gray-600 text-sm mt-2">
         Here's what's been happening with your mental health journey
       </p>
     </div>

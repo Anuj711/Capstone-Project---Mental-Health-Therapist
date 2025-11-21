@@ -13,6 +13,20 @@ export function StatsGrid({
   totalSessions,
   moodTrend,
 }: StatsGridProps) {
+
+  const getMoodDescription = (moodTrend: string) => {
+    switch (moodTrend) {
+      case 'Positive':
+        return 'Your vibe has been terrific lately, we love to see it!'; 
+      case 'Negative':
+        return 'It\'s been tough lately, but remember you\'re doing your best!';
+      case 'Balanced':
+        return 'Your emotions have been quite stable recently.';
+      default:
+        return 'Start journaling to track your mood trends';
+    }
+  };
+  
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <StatsCard
@@ -32,7 +46,7 @@ export function StatsGrid({
       <StatsCard
         title="Mood Trend"
         value={moodTrend}
-        description="Your mood has been generally positive"
+        description={getMoodDescription(moodTrend)}
         icon={<Activity className="h-5 w-5 text-violet-500" />}
       />
 

@@ -28,7 +28,7 @@ export function MessageBubble({ msg, userPhotoURL, userDisplayName }: MessageBub
           'max-w-[70%] rounded-2xl px-4 py-3 break-words',
           isAssistant
             ? 'bg-gray-100 text-gray-900'
-            : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+            : 'bg-textPrimary  to-purple-600 text-white'
         )}
       >
         {isAssistant && (

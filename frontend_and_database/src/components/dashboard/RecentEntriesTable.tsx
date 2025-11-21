@@ -37,10 +37,10 @@ export function RecentEntriesTable({ entries }: RecentEntriesTableProps) {
     <Card className="lg:col-span-2 shadow-sm">
       <CardHeader className="flex flex-row items-center">
         <div className="grid gap-2">
-          <CardTitle className="text-xl text-gray-700">
+          <CardTitle className="text-lg text-gray-700">
             Recent Journal Entries
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs">
             A look at your most recent thoughts and feelings.
           </CardDescription>
         </div>

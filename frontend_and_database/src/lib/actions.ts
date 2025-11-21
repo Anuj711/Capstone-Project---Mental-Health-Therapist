@@ -18,6 +18,212 @@ function getAdminApp() {
 
 //Take AI Response and question bank with scores if any
 type DiagnosticMapping = Record<string, Record<string, { score: number }>>;
+
+
+// --------------------
+// CREATE NEW SESSION
+// --------------------
+export async function createNewSession(
+  userId: string,
+  sessionName?: string
+): Promise<{ success: boolean; sessionId?: string; message?: string }> {
+  try {
+    const adminDb = getAdminApp().firestore();
+    
+    const sessionRef = await adminDb.collection(`users/${userId}/sessions`).add({
+      name: sessionName || `Session ${new Date().toLocaleDateString()}`,
+      status: 'active',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      completionPercentage: 0,
+      totalQuestions: 16, // Start with PHQ-9 (9) + GAD-7 (7)
+      answeredQuestions: 0,
+      sufficientDataCollected: false, // Track if we have enough data
+      traumaDetected: false, // Track if trauma mentioned
+    });
+
+    const questionsCollection = sessionRef.collection('questions');
+
+    // PHQ-9 questions
+    const phq9Questions: Record<string, { score: number | null }> = {};
+    for (let i = 1; i <= 9; i++) {
+      phq9Questions[`Q${i}_PHQ9`] = { score: null };
+    }
+    await questionsCollection.doc('PHQ-9').set({
+      questions: phq9Questions,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // GAD-7 questions
+    const gad7Questions: Record<string, { score: number | null }> = {};
+    for (let i = 1; i <= 7; i++) {
+      gad7Questions[`Q${i}_GAD7`] = { score: null };
+    }
+    await questionsCollection.doc('GAD-7').set({
+      questions: gad7Questions,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // PCL-5 will be created dynamically if trauma is detected
+
+    revalidatePath('/chat');
+    return { success: true, sessionId: sessionRef.id };
+  } catch (error) {
+    console.error('Error creating new session:', error);
+    const message = error instanceof Error ? error.message : 'Failed to create session';
+    return { success: false, message };
+  }
+}
+
+// Enable PCL-5 assessment dynamically if trauma is detected
+export async function enablePCL5Assessment(
+  userId: string,
+  sessionId: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const adminDb = getAdminApp().firestore();
+    
+    // Check if PCL-5 already exists
+    const pcl5Doc = await adminDb
+      .doc(`users/${userId}/sessions/${sessionId}`)
+      .collection('questions')
+      .doc('PCL-5')
+      .get();
+    
+    if (pcl5Doc.exists) {
+      console.log('PCL-5 already exists');
+      return { success: true };
+    }
+    
+    console.log('🆕 Creating PCL-5 assessment (trauma detected)');
+    
+    const questionsCollection = adminDb
+      .doc(`users/${userId}/sessions/${sessionId}`)
+      .collection('questions');
+    
+    // Create PCL-5 questions
+    const pcl5Questions: Record<string, { score: number | null }> = {};
+    for (let i = 1; i <= 20; i++) {
+      pcl5Questions[`Q${i}_PCL5`] = { score: null };
+    }
+    
+    await questionsCollection.doc('PCL-5').set({
+      questions: pcl5Questions,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    
+    // Update session to reflect new total
+    await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
+      totalQuestions: 36, // 9 + 7 + 20
+      traumaDetected: true,
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error enabling PCL-5:', error);
+    return { success: false, message: 'Failed to enable PCL-5 assessment' };
+  }
+}
+
+
+
+// --------------------
+// CALCULATE ASSESSMENTS FROM DIAGNOSTIC MAPPING
+// --------------------
+function calculateAssessments(diagnosticMapping: DiagnosticMapping) {
+  const assessments = [];
+
+  for (const [assessmentName, questionMap] of Object.entries(diagnosticMapping)) {
+    let totalScore = 0;
+    let count = 0;
+
+    // Sum up all scores for this assessment
+    for (const [questionId, data] of Object.entries(questionMap)) {
+      if (data.score !== null && data.score !== undefined) {
+        totalScore += data.score;
+        count++;
+      }
+    }
+
+    // Set assessment-specific parameters
+    let maxScore = 27;
+    let severity = 'Minimal';
+    let fullName = 'Major Depressive Disorder';
+
+    if (assessmentName === 'GAD-7') {
+      maxScore = 21;
+      fullName = 'Generalized Anxiety Disorder';
+      if (totalScore >= 15) severity = 'Severe';
+      else if (totalScore >= 10) severity = 'Moderate';
+      else if (totalScore >= 5) severity = 'Mild';
+      else severity = 'Minimal';
+    } else if (assessmentName === 'PCL-5') {
+      maxScore = 80;
+      fullName = 'Post-Traumatic Stress Disorder';
+      if (totalScore >= 45) severity = 'Severe';
+      else if (totalScore >= 31) severity = 'Moderate';
+      else severity = 'Below Threshold';
+    } else if (assessmentName === 'PHQ-9') {
+      maxScore = 27;
+      fullName = 'Major Depressive Disorder';
+      if (totalScore >= 20) severity = 'Severe';
+      else if (totalScore >= 15) severity = 'Moderately Severe';
+      else if (totalScore >= 10) severity = 'Moderate';
+      else if (totalScore >= 5) severity = 'Mild';
+      else severity = 'Minimal';
+    }
+
+    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+    
+    // Assign color based on percentage 
+    let color = '#10B981'; // Green (low)
+    if (percentage >= 60) {
+      color = '#DC2626'; // Red (high)
+    } else if (percentage >= 30) {
+      color = '#F59E0B'; // Orange (medium)
+    }
+
+    assessments.push({
+      name: fullName,
+      score: totalScore,
+      maxScore,
+      percentage,
+      severity,
+      color,
+    });
+  }
+
+  return assessments;
+}
+
+// --------------------
+// GENERATE CLINICAL INSIGHT
+// --------------------
+function generateClinicalInsight(assessments: any[]) {
+  const moderateOrHigher = assessments.filter(a => 
+    a.severity !== 'Minimal' && a.severity !== 'Below Threshold'
+  );
+
+  if (moderateOrHigher.length === 0) {
+    return 'Your responses indicate minimal symptoms across all assessed areas. Continue monitoring your mental health and reach out to a professional if symptoms develop.';
+  } else if (moderateOrHigher.length === 1) {
+    const assessment = moderateOrHigher[0];
+    const disorder = assessment.name;
+    const severityLevel = assessment.severity.toLowerCase();
+    
+    return `Your responses suggest ${severityLevel} symptoms consistent with ${disorder}. A licensed mental health provider can provide a comprehensive evaluation and discuss appropriate treatment options.`;
+  } else {
+    // Multiple disorders - describe each with severity
+    const disorderDescriptions = moderateOrHigher.map(a => 
+      `${a.severity.toLowerCase()} ${a.name}`
+    ).join(', ');
+    
+    return `Your responses suggest overlapping symptoms including ${disorderDescriptions}. This comorbidity pattern is common, and a licensed mental health provider can help clarify the best support approach for you.`;
+  }
+}
+
+// --------------------
+// UPDATE QUESTION SCORES
+// --------------------
 export async function updateQuestionScores(
   userId: string,
   sessionId: string,
@@ -28,24 +234,143 @@ export async function updateQuestionScores(
     .doc(`users/${userId}/sessions/${sessionId}`)
     .collection('questions');
 
+  // Update question scores with proper nested field syntax
   for (const [assessmentName, questionMap] of Object.entries(mapping)) {
-    const updates = Object.entries(questionMap).reduce(
-      (acc, [questionId, { score }]) => {
-        acc[questionId] = { score };
-        return acc;
-      },
-      {} as Record<string, { score: number }>
-    );
+    const updates: Record<string, { score: number }> = {};
+    
+    for (const [questionId, { score }] of Object.entries(questionMap)) {
+      updates[`questions.${questionId}`] = { score };
+    }
 
-    await questionsCollection.doc(assessmentName).set(
-      {
-        questions: updates,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    await questionsCollection.doc(assessmentName).update(updates);
+  }
+
+  // Calculate completion percentage
+  const snapshot = await questionsCollection.get();
+  const sessionDoc = await adminDb.doc(`users/${userId}/sessions/${sessionId}`).get();
+  const sessionData = sessionDoc.data();
+  
+  let phq9Answered = 0;
+  let phq9Total = 9;
+  let gad7Answered = 0;
+  let gad7Total = 7;
+  let pcl5Answered = 0;
+  let pcl5Total = 20;
+  let hasPCL5 = false;
+  
+  console.log('\n DEBUG: Calculating completion');
+  
+  snapshot.forEach(doc => {
+    const docData = doc.data();
+    const questions = docData.questions || {};
+    
+    if (doc.id === 'PHQ-9') {
+      for (const [questionId, data] of Object.entries(questions)) {
+        if (data && typeof data === 'object' && 'score' in data) {
+          const scoreValue = (data as any).score;
+          if (scoreValue !== null && scoreValue !== undefined) {
+            phq9Answered++;
+          }
+        }
+      }
+    } else if (doc.id === 'GAD-7') {
+      for (const [questionId, data] of Object.entries(questions)) {
+        if (data && typeof data === 'object' && 'score' in data) {
+          const scoreValue = (data as any).score;
+          if (scoreValue !== null && scoreValue !== undefined) {
+            gad7Answered++;
+          }
+        }
+      }
+    } else if (doc.id === 'PCL-5') {
+      hasPCL5 = true;
+      for (const [questionId, data] of Object.entries(questions)) {
+        if (data && typeof data === 'object' && 'score' in data) {
+          const scoreValue = (data as any).score;
+          if (scoreValue !== null && scoreValue !== undefined) {
+            pcl5Answered++;
+          }
+        }
+      }
+    }
+  });
+  
+  console.log(`PHQ-9: ${phq9Answered}/${phq9Total}`);
+  console.log(`GAD-7: ${gad7Answered}/${gad7Total}`);
+  if (hasPCL5) console.log(`PCL-5: ${pcl5Answered}/${pcl5Total}`);
+  
+  // Determine if assessment is sufficiently complete
+  const phq9Complete = phq9Answered >= 5;
+  const gad7Complete = gad7Answered >= 4;
+  const pcl5Complete = !hasPCL5 || pcl5Answered >= 10;
+  
+  const isSufficientlyComplete = phq9Complete && gad7Complete && pcl5Complete;
+  
+  // Calculate percentage for display
+  const totalQuestions = phq9Total + gad7Total + (hasPCL5 ? pcl5Total : 0);
+  const answeredQuestions = phq9Answered + gad7Answered + (hasPCL5 ? pcl5Answered : 0);
+  const percentage = Math.round((answeredQuestions / totalQuestions) * 100);
+  
+  console.log(`\n📊 Progress: ${answeredQuestions}/${totalQuestions} = ${percentage}%`);
+  console.log(`✅ Sufficiently complete: ${isSufficientlyComplete}`);
+  console.log(`  PHQ-9: ${phq9Complete ? '✅' : '❌'} (${phq9Answered}/5 minimum)`);
+  console.log(`  GAD-7: ${gad7Complete ? '✅' : '❌'} (${gad7Answered}/4 minimum)`);
+  console.log(`  PCL-5: ${pcl5Complete ? '✅' : '❌'} (${hasPCL5 ? `${pcl5Answered}/10 minimum` : 'skipped'})\n`);
+  
+  // Update session with metrics
+  await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
+    completionPercentage: percentage,
+    totalQuestions: totalQuestions,
+    answeredQuestions: answeredQuestions,
+    sufficientDataCollected: isSufficientlyComplete,
+  });
+  
+  
+  // Do NOT override "resumed" status
+  const sessionStatus = sessionData?.status;
+  
+  if (isSufficientlyComplete && sessionStatus === 'active') {
+    console.log('✅ Sufficient data collected - generating summary...');
+    
+    // Calculate assessments for summary
+    const fullMapping: DiagnosticMapping = {};
+    
+    snapshot.forEach(doc => {
+      const docData = doc.data();
+      fullMapping[doc.id] = docData.questions || {};
+    });
+    
+    const assessments = calculateAssessments(fullMapping);
+    const clinicalInsight = generateClinicalInsight(assessments);
+    
+    const detailedSymptoms = assessments.map((a) => ({
+      disorder: a.name,
+      likelihood: a.percentage,
+      symptomsReported: [
+        `${a.score} out of ${a.maxScore} total points reported`,
+        `Severity level: ${a.severity}`,
+      ],
+    }));
+
+    await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
+      status: 'ended-complete',
+      endedAt: admin.firestore.FieldValue.serverTimestamp(),
+      summaryData: {
+        assessments,
+        clinicalInsight,
+        detailedSymptoms,
+      }
+    });
+    
+    console.log('✅Session auto-completed with sufficient data');
+  } else if (isSufficientlyComplete && sessionStatus === 'resumed') {
+    console.log('Session is in resumed/free-talk mode - NOT auto-completing');
+  } else {
+    console.log('Not enough data yet or session already ended');
   }
 }
+
+
 // --------------------
 // Journal entry schema
 // --------------------
@@ -115,6 +440,7 @@ export async function deleteJournalEntry(userId: string, entryId: string): Promi
 }
 
 
+
 // --------------------
 // Chat message posting
 // --------------------
@@ -122,47 +448,93 @@ export async function postChatMessage(
   userId: string,
   sessionId: string,
   aiResponse: Object
-): Promise<{ success: boolean; message?: string } > {
+): Promise<{ success: boolean; message?: string }> {
   try {
-    //UNPACKING aiResponse object
-    const { assemblyAI_output, bot_reply, deepface_output, diagnostic_mapping } = aiResponse as {
-      assemblyAI_output: { transcript: string, sentiment: string};
-      bot_reply: string;
-      deepface_output:[];
-      diagnostic_mapping:[];
-      
+    // Unpack the NEW response structure from backend
+    const { 
+      text,                    // was bot_reply
+      diagnostic_scores,       // was diagnostic_mapping (now flat)
+      metadata,                
+      assemblyAI_output, 
+      deepface_output,
+      emergency 
+    } = aiResponse as {
+      text: string;
+      diagnostic_scores: Record<string, number>; // Flat: {"Q1_PHQ9": 2}
+      metadata: {
+        conversation_type: string;
+        crisis_detected: boolean;
+        audio_video_alignment: string;
+        confidence_level: string;
+        next_suggested_focus: string | null;
+      };
+      assemblyAI_output: { 
+        transcript: string;
+        sentiment: string;
+        sentiment_confidence: number;
+      };
+      deepface_output: Record<string, number>; // emotion probabilities
+      emergency: boolean;
     };
 
-    // Data about User given by AI
     const adminDb = getAdminApp().firestore();
     const messagePath = `users/${userId}/sessions/${sessionId}/messages`;
+    
+    // UPDATED: User message with new fields
     const userMessageData = {
       role: 'user' as const,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       userId,
       text: assemblyAI_output.transcript,
-      sentiment: assemblyAI_output.sentiment,
-      emotions: deepface_output,
-      question_scores: diagnostic_mapping
+      // Audio data
+      audio_sentiment: assemblyAI_output.sentiment,
+      audio_confidence: assemblyAI_output.sentiment_confidence,
+      // Video data (store as emotions array)
+      video_emotions: deepface_output ? Object.keys(deepface_output) : [],
     };
     
-    // Write user data to Firestore
+    // Write user message to Firestore
     await adminDb.collection(messagePath).add(userMessageData);
     
-    // Simulate assistant response
-    const assistantResponse: ChatMessage = {
+    // Assistant message with new structure
+    const assistantMessageData = {
       role: 'assistant' as const,
-      id: new Date().toISOString(),
-      text: bot_reply
+      text: text, 
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      userId,
+      
+      conversation_type: metadata.conversation_type,
+      diagnostic_match: diagnostic_scores && Object.keys(diagnostic_scores).length > 0,
+      diagnostic_scores: diagnostic_scores || {}, 
+      metadata: metadata, 
     };
 
     // Write assistant message to Firestore
-    await adminDb.collection(messagePath).add({
-      text: assistantResponse.text,
-      role: 'assistant',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      userId,
-    });
+    await adminDb.collection(messagePath).add(assistantMessageData);
+
+    // Update question scores if diagnostic data exists
+    if (diagnostic_scores && Object.keys(diagnostic_scores).length > 0) {
+      // Convert flat scores back to nested format for updateQuestionScores
+      const diagnosticMapping: DiagnosticMapping = {};
+      
+      for (const [questionId, score] of Object.entries(diagnostic_scores)) {
+        // Extract assessment name from question ID (e.g., "Q1_PHQ9" -> "PHQ-9")
+        let assessmentName = '';
+        if (questionId.includes('PHQ9')) assessmentName = 'PHQ-9';
+        else if (questionId.includes('GAD7')) assessmentName = 'GAD-7';
+        else if (questionId.includes('PCL5')) assessmentName = 'PCL-5';
+        
+        if (assessmentName) {
+          if (!diagnosticMapping[assessmentName]) {
+            diagnosticMapping[assessmentName] = {};
+          }
+          diagnosticMapping[assessmentName][questionId] = { score };
+        }
+      }
+      
+      // Update question scores in Firestore
+      await updateQuestionScores(userId, sessionId, diagnosticMapping);
+    }
 
     revalidatePath('/chat');
     return { success: true };
@@ -185,17 +557,22 @@ export async function deleteChatSession(
     const adminDb = getAdminApp().firestore();
     const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
     
-    const messagesSnapshot = await adminDb.collection(`users/${userId}/sessions/${sessionId}/messages`).get();
+    // Delete all messages
+    const messagesSnapshot = await adminDb
+      .collection(`users/${userId}/sessions/${sessionId}/messages`)
+      .get();
+    
+    // Delete all questions
+    const questionsSnapshot = await adminDb
+      .collection(`users/${userId}/sessions/${sessionId}/questions`)
+      .get();
     
     const batch = adminDb.batch();
     
-    if (!messagesSnapshot.empty) {
-        messagesSnapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-    }
-
+    messagesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    questionsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
     batch.delete(sessionRef);
+    
     await batch.commit();
     
     revalidatePath('/chat');
@@ -235,3 +612,190 @@ export async function renameChatSession(
     return { success: false, message };
   }
 }
+
+// --------------------
+// END SESSION MANUALLY
+// --------------------
+export async function endSessionManually(
+  userId: string,
+  sessionId: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const adminDb = getAdminApp().firestore();
+    const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
+    
+    // Get current session data
+    const sessionDoc = await sessionRef.get();
+    const sessionData = sessionDoc.data();
+    const completionPercentage = sessionData?.completionPercentage || 0;
+    
+    const status = completionPercentage === 100 ? 'ended-complete' : 'ended-premature';
+    
+    // If complete, generate and store summary
+    if (status === 'ended-complete') {
+      // Fetch all questions
+      const questionsSnapshot = await adminDb
+        .collection(`users/${userId}/sessions/${sessionId}/questions`)
+        .get();
+      
+      const fullMapping: DiagnosticMapping = {};
+      questionsSnapshot.forEach(doc => {
+        fullMapping[doc.id] = doc.data().questions || {};
+      });
+
+      // Calculate assessments
+      const assessments = calculateAssessments(fullMapping);
+      const clinicalInsight = generateClinicalInsight(assessments);
+      
+      const detailedSymptoms = assessments.map((a) => ({
+        disorder: a.name,
+        likelihood: a.percentage,
+        symptomsReported: [
+          `${a.score} out of ${a.maxScore} total points reported`,
+          `Severity level: ${a.severity}`,
+        ],
+      }));
+
+      await sessionRef.update({
+        status,
+        endedAt: admin.firestore.FieldValue.serverTimestamp(),
+        summaryData: {
+          assessments,
+          clinicalInsight,
+          detailedSymptoms,
+        }
+      });
+    } else {
+      await sessionRef.update({
+        status,
+        endedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    revalidatePath('/chat');
+    return { success: true };
+  } catch (error) {
+    console.error('Error ending session:', error);
+    return { success: false, message: 'Failed to end session' };
+  }
+}
+
+// --------------------
+// RESUME SESSION
+// --------------------
+export async function resumeSession(
+  userId: string,
+  sessionId: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const adminDb = getAdminApp().firestore();
+    const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
+    
+    // Fetch current session data
+    const sessionSnap = await sessionRef.get();
+    const session = sessionSnap.data();
+
+    if (!session) {
+      return { success: false, message: "Session not found" };
+    }
+
+    const sufficientDataCollected = session.sufficientDataCollected ?? false;
+    const previousStatus = session.status;
+
+    let newStatus: "active" | "resumed";
+
+    // If sufficient data collected OR session was ended-complete → resume free-talk mode
+    if (sufficientDataCollected || previousStatus === "ended-complete") {
+      newStatus = "resumed";
+      console.log('✅ Resuming in free-talk mode (sufficient data collected)');
+    }
+    // If user had NOT finished diagnostics → return to active mode
+    else {
+      newStatus = "active";
+      console.log('✅ Resuming in diagnostic mode (insufficient data)');
+    }
+
+    await sessionRef.update({
+      status: newStatus,
+      resumedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    revalidatePath('/chat');
+    return { success: true };
+  } catch (error) {
+    console.error('Error resuming session:', error);
+    return { success: false, message: 'Failed to resume session' };
+  }
+}
+
+
+//uncomment down here to manually generate session summary
+// --------------------
+// MANUALLY GENERATE SUMMARY (for testing/manual triggering)
+// --------------------
+/*
+export async function generateSessionSummary(
+  userId: string,
+  sessionId: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const adminDb = getAdminApp().firestore();
+    const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
+    
+    // Fetch all questions
+    const questionsSnapshot = await adminDb
+      .collection(`users/${userId}/sessions/${sessionId}/questions`)
+      .get();
+    
+    if (questionsSnapshot.empty) {
+      return { success: false, message: 'No questions found for this session' };
+    }
+
+    const fullMapping: DiagnosticMapping = {};
+    questionsSnapshot.forEach(doc => {
+      fullMapping[doc.id] = doc.data().questions || {};
+    });
+
+    console.log(' Diagnostic mapping:', fullMapping);
+
+    // Calculate assessments
+    const assessments = calculateAssessments(fullMapping);
+    console.log(' Assessments calculated:', assessments);
+
+    if (assessments.length === 0) {
+      return { success: false, message: 'No valid assessments could be calculated' };
+    }
+
+    const clinicalInsight = generateClinicalInsight(assessments);
+    console.log(' Clinical insight:', clinicalInsight);
+    
+    const detailedSymptoms = assessments.map((a) => ({
+      disorder: a.name,
+      likelihood: a.percentage,
+      symptomsReported: [
+        `${a.score} out of ${a.maxScore} total points reported`,
+        `Severity level: ${a.severity}`,
+      ],
+    }));
+
+    // Store summary data AND ensure proper status/completion
+    await sessionRef.update({
+      status: 'ended-complete',
+      completionPercentage: 100,
+      endedAt: admin.firestore.FieldValue.serverTimestamp(),
+      summaryData: {
+        assessments,
+        clinicalInsight,
+        detailedSymptoms,
+      }
+    });
+
+    console.log(' Summary data stored successfully');
+    revalidatePath(`/session-summary/${sessionId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error generating summary:', error);
+    const message = error instanceof Error ? error.message : 'Failed to generate summary';
+    return { success: false, message };
+  }
+}*/
