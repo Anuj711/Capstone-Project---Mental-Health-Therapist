@@ -34,9 +34,9 @@ export default function JournalPage() {
       {/* Header Section */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900">My Journal</h1>
-          <p className="text-gray-600 mt-2">
-            Capture your thoughts, emotions, and daily reflections
+          <h1 className="text-xl font-bold text-gray-900">My Journal</h1>
+          <p className="text-gray-600 text-sm mt-2">
+            A safe space for your thoughts, emotions, and daily reflections
           </p>
         </div>
         <NewJournalEntry />

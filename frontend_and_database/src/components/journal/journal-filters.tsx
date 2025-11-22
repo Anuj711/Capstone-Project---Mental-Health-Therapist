@@ -8,27 +8,27 @@ import { cn } from '@/lib/utils';
 
 const MOOD_CONFIG: Record<Mood, { icon: React.ReactNode; color: string; bgColor: string }> = {
   Happy: { 
-    icon: <Smile className="h-4 w-4" />, 
+    icon: <Smile className="h-3 w-3" />, 
     color: 'text-green-600 hover:text-black', 
     bgColor: 'bg-green-100 hover:bg-green-100 border-green-200' 
   },
   Anxious: { 
-    icon: <Activity className="h-4 w-4" />, 
+    icon: <Activity className="h-3 w-3" />, 
     color: 'text-yellow-600 hover:text-black', 
     bgColor: 'bg-yellow-100 hover:bg-yellow-100 border-yellow-200' 
   },
   Calm: { 
-    icon: <Wind className="h-4 w-4" />, 
+    icon: <Wind className="h-3 w-3" />, 
     color: 'text-blue-600 hover:text-black', 
     bgColor: 'bg-blue-100 hover:bg-blue-100 border-blue-200' 
   },
   Sad: { 
-    icon: <Frown className="h-4 w-4" />, 
+    icon: <Frown className="h-3 w-3" />, 
     color: 'text-pink-600 hover:text-black', 
     bgColor: 'bg-pink-100 hover:bg-pink-100 border-pink-200' 
   },
   Neutral: { 
-    icon: <Meh className="h-4 w-4" />, 
+    icon: <Meh className="h-3 w-3" />, 
     color: 'text-gray-600 hover:text-black', 
     bgColor: 'bg-gray-100 hover:bg-gray-100 border-gray-200' 
   },
@@ -58,7 +58,7 @@ export function JournalFilters({
             placeholder="Search entries..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-50 border-gray-200 rounded-full"
+            className="pl-10 bg-gray-50 border-gray-200 rounded-full text-xs"
           />
         </div>
 
@@ -104,7 +104,6 @@ export function JournalFilters({
           })}
         </div>
 
-        {/* Sort Dropdown (optional) */}
         
       </div>
     </div>

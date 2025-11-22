@@ -38,3 +38,67 @@ export type MoodDataItem = {
   mood: Mood;
   count: number;
 };
+
+// Add these types at the end
+export type SessionStatus = 
+  | 'active'
+  | 'ended-premature' 
+  | 'ended-complete'
+  | 'resumed';
+
+  
+export interface AssessmentScore {
+  name: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  severity: string;
+  color: string;
+}
+
+export interface DetailedSymptom {
+  disorder: string;
+  likelihood: number;
+  symptomsReported: string[];
+}
+
+export interface SummaryData {
+  assessments: AssessmentScore[];
+  clinicalInsight: string;
+  detailedSymptoms: DetailedSymptom[];
+}
+
+export type Session = {
+  id: string;
+  name: string;
+  status: SessionStatus;
+  createdAt: any;
+  endedAt?: any;
+  resumedAt?: any;
+  completionPercentage: number;
+  totalQuestions: number;
+  answeredQuestions: number;
+  summaryData?: SummaryData;
+  isTemp?: boolean; 
+};
+
+export interface SessionSummaryData {
+  sessionId: string;
+  timestamp: string;
+  assessments: Array<{
+    name: string;
+    score: number;
+    maxScore: number;
+    percentage: number;
+    severity: string;
+    color: string;
+  }>;
+  comorbidityInsight: string;
+  detailedSymptoms: Array<{
+    disorder: string;
+    likelihood: number;
+    symptomsReported: string[];
+  }>;
+}
+
+type DiagnosticMapping = Record<string, Record<string, { score: number }>>;

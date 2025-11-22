@@ -18,7 +18,7 @@ export function StatsCard({ title, value, description, icon }: StatsCardProps) {
         {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold text-gray-700">{value}</div>
+        <div className="text-xl font-bold text-gray-700">{value}</div>
         <p className="text-xs text-gray-500 mt-1">{description}</p>
       </CardContent>
     </Card>
