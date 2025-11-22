@@ -86,8 +86,10 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         questionnaireJson ?? '{}'
       );
 
-      // Update scores
-      await updateQuestionScores(`${user!.uid}`, sessionId, aiResponse.diagnostic_mapping);
+    // update scores only if diagnostic data is present
+      if (aiResponse.diagnostic_mapping && Object.keys(aiResponse.diagnostic_mapping).length > 0) {
+        await updateQuestionScores(`${user!.uid}`, sessionId, aiResponse.diagnostic_mapping);
+      }
       await postChatMessage(user!.uid, sessionId, aiResponse);
       
     } catch (error: any) {

@@ -87,15 +87,31 @@ def analyze_turn():
     # Step 2: Call OpenAI model --> gives all diagnosis and chatbot response 
     model_output = call_openai_therapy_model(assembly_data, deepface_data, questionnaires, past_turns)
     
+    ##START OF FIX FROM GEMINI IN Chatbot_Gives_Meaningful_Responses2 TEST TO FIX WEIRD ERRORS##
+
+    # Check if model_output is a list and extract the first (and likely only) dictionary element
+    if isinstance(model_output, list) and model_output:
+        model_output_dict = model_output[0] # Access the dictionary
+    else:
+        # Handle unexpected format (e.g., return an error or a default)
+        return jsonify({"error": "Unexpected model output format: model returned an empty list or non-list type"}), 500
+
     # Step 3: Return final JSON for Firestore & frontend
     # Reference this for details https://docs.google.com/document/d/1puUwAbnJJj2ewmRC75_HooBzAynsvHOO6uR1tnbGAAM/edit?tab=t.0#heading=h.2jed7gsbkiph ("backend returns:") 
     response_payload = {
         "assemblyAI_output": assembly_data,
         "deepface_output": deepface_data,
-        "bot_reply": model_output.get("bot_reply"),
-        "diagnostic_match": False if not model_output.get("diagnostic_mapping") else True,
-        "conversation_type": model_output.get("conversation_type", "free_talk"),
-        "diagnostic_mapping": model_output.get("diagnostic_mapping", {}),
+        #ORIGINAL: "bot_reply": model_output.get("bot_reply"),
+        #FIX:
+        "bot_reply": model_output_dict.get("bot_reply"), # Use the dictionary variable
+        "diagnostic_match": False if not model_output_dict.get("diagnostic_mapping") else True,
+        #ORIGINAL
+        #"conversation_type": model_output.get("conversation_type", "free_talk"),
+        #"diagnostic_mapping": model_output.get("diagnostic_mapping", {}),
+        #"emergency": False
+        #FIX
+        "conversation_type": model_output_dict.get("conversation_type", "free_talk"),
+        "diagnostic_mapping": model_output_dict.get("diagnostic_mapping", {}),
         "emergency": False
     }
 
