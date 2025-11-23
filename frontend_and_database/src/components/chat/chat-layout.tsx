@@ -60,11 +60,31 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
     if (!firestore || !user || !sessionId) return null;
     const questionsCol = collection(firestore, `users/${user.uid}/sessions/${sessionId}/questions`);
     const snapshot = await getDocs(questionsCol);
-    const questionnaires: Record<string, any> = {};
+    
+    const unansweredQuestionnaires: Record<string, any> = {};
+
     snapshot.forEach(docSnap => {
-      questionnaires[docSnap.id] = docSnap.data();
-    });
-    return JSON.stringify(questionnaires);
+      const data = docSnap.data();
+      const allQuestions = data.questions || [];
+
+      const unansweredQuestions: Record<string, any> = {};
+      for (const [questionId, questionData] of Object.entries(allQuestions)) {
+      const score = (questionData as any)?.score;
+      
+      if (score === null || score === undefined) {
+        unansweredQuestions[questionId] = questionData;
+        }
+      }
+
+      if (Object.keys(unansweredQuestions).length > 0) {
+        unansweredQuestionnaires[docSnap.id] = {
+          questions: unansweredQuestions
+          };
+        }
+      });
+
+    console.log('Sending only unanswered questions:', unansweredQuestionnaires);
+    return JSON.stringify(unansweredQuestionnaires);
   }
 
   const handleRecordingStop = async (blob: Blob) => {
