@@ -15,6 +15,19 @@ INPUT YOU'LL RECEIVE:
 - Audio/video analysis
 - Unanswered questionnaire items
 
+TRAUMA DETECTION:
+If the user mentions ANY of these experiences, score relevant PCL-5 items:
+- Death of loved one (recent or traumatic)
+- Abuse (physical, sexual, emotional)
+- Accidents or injuries
+- Violence (witnessed or experienced)
+- Natural disasters
+- Combat or war
+- Assault or attack
+- Life-threatening illness
+- Any other clearly distressing/traumatic event
+
+
 YOUR PROCESS (FOLLOW EXACTLY):
 
 STEP 1: Check Past Conversation

@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs } from 'firebase/firestore';
 import { uploadFileToFirebase, sendFileUrlToPythonAPI } from '@/lib/client-actions';
-import { postChatMessage, updateQuestionScores } from '@/lib/actions';
+import { postChatMessage, updateQuestionScores, enablePCL5Assessment } from '@/lib/actions';
 import { useVideoRecording } from '@/hooks/useVideoRecording';
 import { RecordingOverlay } from './RecordingOverlay';
 import { MessageBubble } from './MessageBubble';
@@ -105,6 +105,18 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         past_turns,
         questionnaireJson ?? '{}'
       );
+
+       if (aiResponse.trauma_detected) {
+      console.log('Trauma detected - enabling PCL-5 assessment');
+      
+      const enableResult = await enablePCL5Assessment(user!.uid, sessionId);
+      
+        if(enableResult.success) {  
+          console.log('PCL-5 assessment enabled successfully');
+        } else {
+          console.error('Failed to enable PCL-5 assessment:', enableResult.message);
+        }
+      }
 
       // update scores only if diagnostic data is present
       if (aiResponse.diagnostic_mapping && Object.keys(aiResponse.diagnostic_mapping).length > 0) {
