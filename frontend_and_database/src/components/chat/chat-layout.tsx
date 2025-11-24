@@ -123,7 +123,8 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         `${user!.uid}`,
         uploadResult.url,
         past_turns,
-        questionnaireJson ?? '{}'
+        questionnaireJson ?? '{}',
+        sessionStatus
       );
 
        if (aiResponse.trauma_detected) {

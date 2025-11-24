@@ -12,6 +12,34 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+VALID_QUESTION_IDS = {
+    'PHQ-9': [f'Q{i}_PHQ9' for i in range(1, 10)],
+    'GAD-7': [f'Q{i}_GAD7' for i in range(1, 8)],
+    'PCL-5': [f'Q{i}_PCL5' for i in range(1, 21)]
+}
+
+def validate_and_clean_diagnostic_mapping(diagnostic_mapping):
+    """Remove invalid question IDs from diagnostic mapping"""
+    cleaned = {}
+    
+    for assessment_name, questions in diagnostic_mapping.items():
+        if assessment_name not in VALID_QUESTION_IDS:
+            print(f"[WARNING] Invalid assessment name: {assessment_name}")
+            continue
+        
+        valid_questions = {}
+        for question_id, data in questions.items():
+            if question_id in VALID_QUESTION_IDS[assessment_name]:
+                valid_questions[question_id] = data
+            else:
+                print(f"[WARNING] Invalid question ID: {question_id} in {assessment_name}")
+                print(f"[WARNING] Valid IDs for {assessment_name}: {VALID_QUESTION_IDS[assessment_name]}")
+        
+        if valid_questions:
+            cleaned[assessment_name] = valid_questions
+    
+    return cleaned
+
 def prepare_data_for_json(data):
     """Recursively converts NumPy/custom numeric types to standard Python types."""
     if isinstance(data, dict):
@@ -61,7 +89,7 @@ def analyze_turn():
     
     # Debug: Show past turns
     print("\n" + "="*80)
-    print("🔍 DEBUG: PAST TURNS RECEIVED FROM FRONTEND")
+    print("DEBUG: PAST TURNS RECEIVED FROM FRONTEND")
     print(f"Number of turns: {len(past_turns)}")
     for i, turn in enumerate(past_turns[-3:], 1):
         print(f"\nTurn {i}:")
@@ -102,25 +130,65 @@ def analyze_turn():
         return jsonify(emergency_response), 200
 
     # Step 2: Call OpenAI model
-    model_output = call_openai_therapy_model(assembly_data, deepface_data, questionnaires, past_turns)
+    session_status = data.get("session_status", "active")
+    print(f"[DEBUG] Session status from frontend: {session_status}")
+    
+    model_output = call_openai_therapy_model(assembly_data, deepface_data, questionnaires, past_turns, session_status)
+    
+    # Validate and clean diagnostic mapping (only remove invalid question IDs)
+    if model_output.get("diagnostic_mapping"):
+        original_mapping = model_output["diagnostic_mapping"]
+        cleaned_mapping = validate_and_clean_diagnostic_mapping(original_mapping)
+        
+        if cleaned_mapping != original_mapping:
+            print("[WARNING] Removed invalid question IDs from AI response")
+        
+        model_output["diagnostic_mapping"] = cleaned_mapping
     
     # Step 3: Format response for Firestore
     diagnostic_scores = flatten_diagnostic_scores(model_output.get("diagnostic_mapping", {}))
     
-    # Check if trauma/PCL-5 questions were scored
+    # Check if trauma was mentioned in transcript (keyword-based detection)
+    transcript_lower = assembly_data.get("transcript", "").lower()
+    trauma_keywords = [
+        'died', 'death', 'passed away', 'funeral', 'lost my', 'lost a', 'killed',
+        'abuse', 'abused', 'assault', 'assaulted', 'rape', 'raped', 'molest',
+        'accident', 'crash', 'injured', 'hurt badly', 'hospitalized',
+        'attacked', 'violence', 'witnessed', 'saw someone die', 'saw someone get',
+        'war', 'combat', 'deployed', 'shot at', 'explosion',
+        'disaster', 'hurricane', 'earthquake', 'fire', 'flood', 'tornado',
+        'trauma', 'traumatic', 'ptsd', 'traumatized',
+        'overdose', 'suicide attempt', 'tried to kill', 'attempted suicide'
+    ]
+    
+    trauma_mentioned = any(keyword in transcript_lower for keyword in trauma_keywords)
+    
+    # Check if PCL-5 questions were scored
     has_pcl5_scores = any('PCL5' in key for key in diagnostic_scores.keys())
-    trauma_detected = has_pcl5_scores
+    
+    # Trauma is detected if EITHER mentioned OR PCL-5 scored
+    trauma_detected = trauma_mentioned or has_pcl5_scores
+    
+    if trauma_mentioned and not has_pcl5_scores:
+        print(f"\n[TRAUMA] Keyword detected in transcript: '{transcript[:100]}'")
+        matching_keywords = [k for k in trauma_keywords if k in transcript_lower]
+        print(f"[TRAUMA] Matching keywords: {matching_keywords}")
     
     # Check if PCL-5 exists in questionnaires
-    has_pcl5_questionnaire = 'PCL-5' in questionnaires or 'PCL‑5' in questionnaires
+    has_pcl5_questionnaire = 'PCL-5' in questionnaires or 'PCL-5' in questionnaires
     
     # Log trauma detection
     if trauma_detected and not has_pcl5_questionnaire:
         print("\n" + "="*80)
-        print("🆕 TRAUMA DETECTED - PCL-5 should be enabled")
+        print("TRAUMA DETECTED - PCL-5 should be enabled")
         print(f"   Session: {session_id}")
         print(f"   User: {user_id}")
-        print(f"   PCL-5 scores found: {[k for k in diagnostic_scores.keys() if 'PCL5' in k]}")
+        if trauma_mentioned:
+            print(f"   Reason: Trauma keywords in transcript")
+            matching_keywords = [k for k in trauma_keywords if k in transcript_lower]
+            print(f"   Keywords: {matching_keywords}")
+        if has_pcl5_scores:
+            print(f"   PCL-5 scores found: {[k for k in diagnostic_scores.keys() if 'PCL5' in k]}")
         print("="*80 + "\n")
     
     # Determine audio/video alignment
@@ -159,11 +227,11 @@ def analyze_turn():
         pcl5_count = sum(1 for k in diagnostic_scores if 'PCL5' in k)
         
         # Prioritize incomplete assessments
-        if phq9_count < 5:  # Need at least 5 for diagnosis
+        if phq9_count < 5:
             next_focus = "PHQ-9"
-        elif gad7_count < 4:  # Need at least 4 for diagnosis
+        elif gad7_count < 4:
             next_focus = "GAD-7"
-        elif has_pcl5_questionnaire and pcl5_count < 10:  # Need at least 10 for diagnosis
+        elif has_pcl5_questionnaire and pcl5_count < 10:
             next_focus = "PCL-5"
     
     # Build response
@@ -181,7 +249,7 @@ def analyze_turn():
         "deepface_output": deepface_data,
         "diagnostic_match": len(diagnostic_scores) > 0,
         "emergency": False,
-        "trauma_detected": trauma_detected,  # Signal to frontend
+        "trauma_detected": trauma_detected,
     }
 
     return jsonify(response_payload), 200

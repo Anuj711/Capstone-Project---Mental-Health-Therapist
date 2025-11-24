@@ -85,7 +85,8 @@ export async function sendFileUrlToPythonAPI(
   user_id: string, 
   video_url: string, 
   past_turns: Array<{user_transcript: string; bot_reply: string}>, 
-  questionnaires: string
+  questionnaires: string,
+  session_status: string="active"
 ) {
   try {
     const payload = {
@@ -94,9 +95,10 @@ export async function sendFileUrlToPythonAPI(
       video_url,
       past_turns,
       questionnaires,
+      session_status,
     };
     
-    console.log('🚀 Sending to backend:', payload);
+    console.log('Sending to backend:', payload);
     
     const response = await fetch("http://localhost:8000/analyze_turn", {
       method: "POST",

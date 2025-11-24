@@ -37,33 +37,31 @@ export async function createNewSession(
       completionPercentage: 0,
       totalQuestions: 16, // Start with PHQ-9 (9) + GAD-7 (7)
       answeredQuestions: 0,
-      sufficientDataCollected: false, // Track if we have enough data
-      traumaDetected: false, // Track if trauma mentioned
+      sufficientDataCollected: false,
+      traumaDetected: false,
     });
 
     const questionsCollection = sessionRef.collection('questions');
 
-    // PHQ-9 questions
-    const phq9Questions: Record<string, { score: number | null }> = {};
+    // PHQ-9 questions with answered status
+    const phq9Questions: Record<string, { score: number | null; answered: boolean }> = {};
     for (let i = 1; i <= 9; i++) {
-      phq9Questions[`Q${i}_PHQ9`] = { score: null };
+      phq9Questions[`Q${i}_PHQ9`] = { score: null, answered: false };
     }
     await questionsCollection.doc('PHQ-9').set({
       questions: phq9Questions,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // GAD-7 questions
-    const gad7Questions: Record<string, { score: number | null }> = {};
+    // GAD-7 questions with answered status
+    const gad7Questions: Record<string, { score: number | null; answered: boolean }> = {};
     for (let i = 1; i <= 7; i++) {
-      gad7Questions[`Q${i}_GAD7`] = { score: null };
+      gad7Questions[`Q${i}_GAD7`] = { score: null, answered: false };
     }
     await questionsCollection.doc('GAD-7').set({
       questions: gad7Questions,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
-    // PCL-5 will be created dynamically if trauma is detected
 
     revalidatePath('/chat');
     return { success: true, sessionId: sessionRef.id };
@@ -82,7 +80,6 @@ export async function enablePCL5Assessment(
   try {
     const adminDb = getAdminApp().firestore();
     
-    // Check if PCL-5 already exists
     const pcl5Doc = await adminDb
       .doc(`users/${userId}/sessions/${sessionId}`)
       .collection('questions')
@@ -100,10 +97,10 @@ export async function enablePCL5Assessment(
       .doc(`users/${userId}/sessions/${sessionId}`)
       .collection('questions');
     
-    // Create PCL-5 questions
-    const pcl5Questions: Record<string, { score: number | null }> = {};
+    // Create PCL-5 questions with answered status
+    const pcl5Questions: Record<string, { score: number | null; answered: boolean }> = {};
     for (let i = 1; i <= 20; i++) {
-      pcl5Questions[`Q${i}_PCL5`] = { score: null };
+      pcl5Questions[`Q${i}_PCL5`] = { score: null, answered: false };
     }
     
     await questionsCollection.doc('PCL-5').set({
@@ -111,9 +108,8 @@ export async function enablePCL5Assessment(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     
-    // Update session to reflect new total
     await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
-      totalQuestions: 36, // 9 + 7 + 20
+      totalQuestions: 36,
       traumaDetected: true,
     });
     
@@ -234,103 +230,91 @@ export async function updateQuestionScores(
     .doc(`users/${userId}/sessions/${sessionId}`)
     .collection('questions');
 
-  // Update question scores with proper nested field syntax
+  console.log('\n' + '='.repeat(80));
+  console.log('🔄 UPDATE QUESTION SCORES');
+  
+  // Update question scores AND mark as answered
   for (const [assessmentName, questionMap] of Object.entries(mapping)) {
-    const updates: Record<string, { score: number }> = {};
+    const updates: Record<string, any> = {};
     
     for (const [questionId, { score }] of Object.entries(questionMap)) {
-      updates[`questions.${questionId}`] = { score };
+      // Validate score is within valid range
+      const maxScore = assessmentName === 'PCL-5' ? 4 : 3;
+      const isValidScore = score !== null && score !== undefined && score >= 0 && score <= maxScore;
+      
+      if (isValidScore) {
+        updates[`questions.${questionId}.score`] = score;
+        updates[`questions.${questionId}.answered`] = true; // Mark as answered
+        console.log(`  ✅ ${questionId}: score=${score}, answered=true`);
+      } else {
+        console.log(`  ⚠️ ${questionId}: invalid score=${score}`);
+      }
     }
 
-    await questionsCollection.doc(assessmentName).update(updates);
+    if (Object.keys(updates).length > 0) {
+      await questionsCollection.doc(assessmentName).update({
+        ...updates,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
   }
 
-  // Calculate completion percentage
+  // Check if ALL questions are answered
   const snapshot = await questionsCollection.get();
-  const sessionDoc = await adminDb.doc(`users/${userId}/sessions/${sessionId}`).get();
-  const sessionData = sessionDoc.data();
   
-  let phq9Answered = 0;
-  let phq9Total = 9;
-  let gad7Answered = 0;
-  let gad7Total = 7;
-  let pcl5Answered = 0;
-  let pcl5Total = 20;
-  let hasPCL5 = false;
+  let totalQuestions = 0;
+  let answeredQuestions = 0;
+  let allAnswered = true;
   
-  console.log('\n DEBUG: Calculating completion');
+  console.log('\n📋 Checking completion status:');
   
   snapshot.forEach(doc => {
     const docData = doc.data();
     const questions = docData.questions || {};
+    const assessmentName = doc.id;
     
-    if (doc.id === 'PHQ-9') {
-      for (const [questionId, data] of Object.entries(questions)) {
-        if (data && typeof data === 'object' && 'score' in data) {
-          const scoreValue = (data as any).score;
-          if (scoreValue !== null && scoreValue !== undefined) {
-            phq9Answered++;
-          }
-        }
-      }
-    } else if (doc.id === 'GAD-7') {
-      for (const [questionId, data] of Object.entries(questions)) {
-        if (data && typeof data === 'object' && 'score' in data) {
-          const scoreValue = (data as any).score;
-          if (scoreValue !== null && scoreValue !== undefined) {
-            gad7Answered++;
-          }
-        }
-      }
-    } else if (doc.id === 'PCL-5') {
-      hasPCL5 = true;
-      for (const [questionId, data] of Object.entries(questions)) {
-        if (data && typeof data === 'object' && 'score' in data) {
-          const scoreValue = (data as any).score;
-          if (scoreValue !== null && scoreValue !== undefined) {
-            pcl5Answered++;
-          }
+    let assessmentTotal = 0;
+    let assessmentAnswered = 0;
+    
+    for (const [questionId, data] of Object.entries(questions)) {
+      if (data && typeof data === 'object') {
+        const questionData = data as { score: number | null; answered: boolean };
+        totalQuestions++;
+        assessmentTotal++;
+        
+        if (questionData.answered === true) {
+          answeredQuestions++;
+          assessmentAnswered++;
+        } else {
+          allAnswered = false;
         }
       }
     }
+    
+    console.log(`  ${assessmentName}: ${assessmentAnswered}/${assessmentTotal} answered`);
   });
   
-  console.log(`PHQ-9: ${phq9Answered}/${phq9Total}`);
-  console.log(`GAD-7: ${gad7Answered}/${gad7Total}`);
-  if (hasPCL5) console.log(`PCL-5: ${pcl5Answered}/${pcl5Total}`);
+  const percentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
   
-  // Determine if assessment is sufficiently complete
-  const phq9Complete = phq9Answered >= 5;
-  const gad7Complete = gad7Answered >= 4;
-  const pcl5Complete = !hasPCL5 || pcl5Answered >= 10;
+  console.log(`\n📊 Overall Progress: ${answeredQuestions}/${totalQuestions} = ${percentage}%`);
+  console.log(`✅ All questions answered: ${allAnswered ? 'YES' : 'NO'}`);
   
-  const isSufficientlyComplete = phq9Complete && gad7Complete && pcl5Complete;
-  
-  // Calculate percentage for display
-  const totalQuestions = phq9Total + gad7Total + (hasPCL5 ? pcl5Total : 0);
-  const answeredQuestions = phq9Answered + gad7Answered + (hasPCL5 ? pcl5Answered : 0);
-  const percentage = Math.round((answeredQuestions / totalQuestions) * 100);
-  
-  console.log(`\n📊 Progress: ${answeredQuestions}/${totalQuestions} = ${percentage}%`);
-  console.log(`✅ Sufficiently complete: ${isSufficientlyComplete}`);
-  console.log(`  PHQ-9: ${phq9Complete ? '✅' : '❌'} (${phq9Answered}/5 minimum)`);
-  console.log(`  GAD-7: ${gad7Complete ? '✅' : '❌'} (${gad7Answered}/4 minimum)`);
-  console.log(`  PCL-5: ${pcl5Complete ? '✅' : '❌'} (${hasPCL5 ? `${pcl5Answered}/10 minimum` : 'skipped'})\n`);
-  
-  // Update session with metrics
+  // Update session progress
   await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
     completionPercentage: percentage,
     totalQuestions: totalQuestions,
     answeredQuestions: answeredQuestions,
-    sufficientDataCollected: isSufficientlyComplete,
+    sufficientDataCollected: allAnswered,
   });
   
-  
-  // Do NOT override "resumed" status
+  // Get session status
+  const sessionDoc = await adminDb.doc(`users/${userId}/sessions/${sessionId}`).get();
+  const sessionData = sessionDoc.data();
   const sessionStatus = sessionData?.status;
   
-  if (isSufficientlyComplete && sessionStatus === 'active') {
-    console.log('✅ Sufficient data collected - generating summary...');
+  // If ALL questions answered AND session is active → generate summary
+  if (allAnswered && sessionStatus === 'active') {
+    console.log('🎉 ALL QUESTIONS ANSWERED - Generating summary and ending session');
     
     // Calculate assessments for summary
     const fullMapping: DiagnosticMapping = {};
@@ -362,12 +346,14 @@ export async function updateQuestionScores(
       }
     });
     
-    console.log('✅Session auto-completed with sufficient data');
-  } else if (isSufficientlyComplete && sessionStatus === 'resumed') {
-    console.log('Session is in resumed/free-talk mode - NOT auto-completing');
+    console.log('✅ Summary generated and session completed');
+  } else if (allAnswered && sessionStatus === 'resumed') {
+    console.log('ℹ️ All questions answered but session is in free-talk mode');
   } else {
-    console.log('Not enough data yet or session already ended');
+    console.log(`⏳ Continue conversation - ${totalQuestions - answeredQuestions} questions remaining`);
   }
+  
+  console.log('='.repeat(80) + '\n');
 }
 
 

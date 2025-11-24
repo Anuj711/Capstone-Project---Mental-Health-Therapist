@@ -1,7 +1,7 @@
 "use client";
 
 import { ChatLayout } from '@/components/chat/chat-layout';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -28,10 +28,6 @@ import { SessionsList } from '@/components/chat/SessionsList';
 import { useSessionManagement } from '@/hooks/useSessionManagement';
 import { resumeSession } from '@/lib/actions';
 
-/*uncomment to test session summary generation*/
-//import { resumeSession, generateSessionSummary } from '@/lib/actions';
-//import { FileText, Loader2 } from 'lucide-react';
-
 export default function ChatPageClient({
   deleteChatSession,
   renameChatSession,
@@ -48,7 +44,10 @@ export default function ChatPageClient({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [tempSessionName, setTempSessionName] = useState('');
   const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
- // const [generatingSummary, setGeneratingSummary] = useState(false);
+  
+  // Resizable sidebar state
+  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [isResizing, setIsResizing] = useState(false);
 
   const {
     activeSessionId,
@@ -61,51 +60,41 @@ export default function ChatPageClient({
 
   const typedSessions = sessions ? sessions as Session[] : undefined;
 
-  {/*uncomment to test session summary generation*/}
-  /*
-  // TEST FUNCTION - Generate summary manually
-  const handleGenerateSummary = async () => {
-    if (!user || !activeSessionId) {
-      toast({
-        title: 'Error',
-        description: 'No active session',
-        variant: 'destructive',
-      });
-      return;
+  // Handle mouse move for resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const newWidth = e.clientX;
+      
+      // Constrain width between 200px and 600px
+      if (newWidth >= 200 && newWidth <= 600) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    } else {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     }
 
-    setGeneratingSummary(true);
-    try {
-      const result = await generateSessionSummary(user.uid, activeSessionId);
-      
-      if (result.success) {
-        toast({
-          title: 'Summary Generated',
-          description: 'Redirecting to summary page...',
-        });
-        setTimeout(() => {
-          router.push(`/session-summary/${activeSessionId}`);
-        }, 500);
-      } else {
-        toast({
-          title: 'Error',
-          description: result.message || 'Failed to generate summary',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate summary',
-        variant: 'destructive',
-      });
-    } finally {
-      setGeneratingSummary(false);
-    }
-  };
-  
-*/
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
   const handleDeleteConfirm = async () => {
     if (!sessionToDelete || !user) return;
 
@@ -275,39 +264,22 @@ export default function ChatPageClient({
       </Dialog>
 
       <div className="h-screen w-full flex overflow-hidden">
-        {/* Left Sidebar */}
-        <div className="hidden lg:flex flex-col w-[300px] h-full border-r bg-gray-50 overflow-y-auto">
+        {/* Left Sidebar - Resizable */}
+        <div 
+          className="hidden lg:flex flex-col h-full border-r bg-gray-50 overflow-y-auto relative"
+          style={{ 
+            width: `${sidebarWidth}px`, 
+            minWidth: '200px', 
+            maxWidth: '600px',
+            flexShrink: 0 
+          }}
+        >
           <div className="flex-shrink-0 py-4">
             <SidebarHeader 
               onEndSession={handleEndSession}
               sessionStatus={activeSession?.status}
             />
-            
-            {/* TEST BUTTON - uncomment to test session summary generation */}
-            {/*}
-            <div className="px-4 mt-4">
-              <Button
-                onClick={handleGenerateSummary}
-                disabled={generatingSummary || !activeSessionId}
-                className="w-full bg-orange-600 hover:bg-orange-700"
-                size="sm"
-              >
-                {generatingSummary ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    [TEST] Generate Summary
-                  </>
-                )}
-              </Button>
-            </div>
-            */}
           </div>
-          
           
           <div className="flex-1 min-h-[400px] pb-4">
             <SessionsList
@@ -326,6 +298,14 @@ export default function ChatPageClient({
               onDelete={setSessionToDelete}
               onResume={handleResume}
             />
+          </div>
+
+          {/* Resize Handle */}
+          <div
+            className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-indigo-500 bg-transparent transition-colors group z-10"
+            onMouseDown={() => setIsResizing(true)}
+          >
+            <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-16 bg-gray-300 group-hover:bg-indigo-500 transition-colors rounded-l" />
           </div>
         </div>
 
