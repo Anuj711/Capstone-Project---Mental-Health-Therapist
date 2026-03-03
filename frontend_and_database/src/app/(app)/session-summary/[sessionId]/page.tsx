@@ -43,7 +43,6 @@ export default function SummaryPage({
       console.log('✅ Session ID:', sessionId);
 
       try {
-        // Get session data
         const sessionPath = `users/${user.uid}/sessions/${sessionId}`;
         console.log('📍 Fetching session from:', sessionPath);
         
@@ -63,11 +62,16 @@ export default function SummaryPage({
         console.log('📊 Session data:', sessionData);
         console.log('🎯 Session status:', sessionData.status);
         console.log('📈 Completion %:', sessionData.completionPercentage);
+        console.log('✅ Sufficient data:', sessionData.sufficientDataCollected);
         
         setSessionStatus(sessionData.status);
 
-        // Check if summary data is already stored in session
-        if (sessionData.status === 'ended-complete' && sessionData.summaryData) {
+        //Check for summary data in both ended-complete AND resumed states
+        const hasCompletedAssessment = sessionData.status === 'ended-complete' || 
+                                       sessionData.status === 'resumed' ||
+                                       sessionData.sufficientDataCollected === true;
+
+        if (hasCompletedAssessment && sessionData.summaryData) {
           console.log('✅ Summary data found in session document');
           
           const data = {
@@ -79,19 +83,19 @@ export default function SummaryPage({
             detailedSymptoms: sessionData.summaryData.detailedSymptoms || [],
           };
 
-          console.log('✅ Summary data prepared from session:', data);
+          console.log('Summary data prepared from session:', data);
           setSummaryData(data);
-        } else if (sessionData.status === 'ended-complete') {
-          console.log('⚠️ Session is complete but no summary data found');
+        } else if (hasCompletedAssessment && !sessionData.summaryData) {
+          console.log('Assessment complete but no summary data found');
           setError('Summary data not available');
         } else {
-          console.log('ℹ️ Session status is not "ended-complete", skipping summary');
+          console.log('Session not complete enough for summary');
         }
       } catch (err) {
-        console.error('💥 Error fetching summary:', err);
+        console.error('Error fetching summary:', err);
         setError('Failed to load session data');
       } finally {
-        console.log('✅ Fetch complete, setting loading to false');
+        console.log('Fetch complete, setting loading to false');
         setLoading(false);
       }
     }
@@ -109,9 +113,9 @@ export default function SummaryPage({
       if (result.success) {
         toast({
           title: 'Session Resumed',
-          description: 'You can now continue your conversation.',
+          description: 'You can now continue your conversation in free-talk mode.',
         });
-        router.push('/chat');
+        router.push(`/chat?session=${sessionId}`); // Navigate to the specific session
       } else {
         toast({
           title: 'Error',
@@ -128,6 +132,15 @@ export default function SummaryPage({
       });
     } finally {
       setResuming(false);
+    }
+  };
+
+  const handleBackToSession = () => {
+    // If already in resumed mode, go directly to the chat
+    if (sessionStatus === 'resumed') {
+      router.push(`/chat?session=${sessionId}`);
+    } else {
+      router.push('/chat');
     }
   };
 
@@ -159,7 +172,7 @@ export default function SummaryPage({
     );
   }
 
-  // Premature ending
+  // Premature ending (no sufficient data collected)
   if (sessionStatus === 'ended-premature') {
     console.log('📍 Rendering premature ending state');
     return (
@@ -220,9 +233,13 @@ export default function SummaryPage({
     );
   }
 
-  // Complete session
-  if (sessionStatus === 'ended-complete' && summaryData) {
-    console.log('✅ Rendering complete session with summary');
+  // CHANGED: Show summary for BOTH ended-complete AND resumed statuses
+  if ((sessionStatus === 'ended-complete' || sessionStatus === 'resumed') && summaryData) {
+    console.log('✅ Rendering session summary (status:', sessionStatus, ')');
+    
+    // Different button text based on status
+    const isAlreadyResumed = sessionStatus === 'resumed';
+    
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
         <SessionSummary {...summaryData} />
@@ -230,33 +247,57 @@ export default function SummaryPage({
         <div className="max-w-4xl mx-auto px-6 pb-12">
           <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-8 border border-indigo-100">
             <div className="text-center space-y-4">
-              <h3 className="text-xl font-semibold text-gray-900">
-                Want to Talk More?
-              </h3>
-              <p className="text-gray-600 max-w-2xl mx-auto">
-                Assessment complete! You can resume this session for free-form conversation 
-                about anything on your mind, or start a new session with fresh diagnostic questions.
-              </p>
+              {isAlreadyResumed ? (
+                <>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Currently in Free-Talk Mode
+                  </h3>
+                  <p className="text-gray-600 max-w-2xl mx-auto">
+                    You're already in free-talk mode! Continue your conversation or start a new session.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Want to Talk More?
+                  </h3>
+                  <p className="text-gray-600 max-w-2xl mx-auto">
+                    Assessment complete! You can resume this session for free-form conversation 
+                    about anything on your mind, or start a new session with fresh diagnostic questions.
+                  </p>
+                </>
+              )}
               
               <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
-                <Button
-                  onClick={handleResume}
-                  disabled={resuming}
-                  size="lg"
-                  className="bg-textPrimary hover:from-indigo-700 hover:to-purple-700"
-                >
-                  {resuming ? (
-                    <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      Resuming...
-                    </>
-                  ) : (
-                    <>
-                      <MessageSquare className="h-5 w-5 mr-2" />
-                      Continue Free Talk
-                    </>
-                  )}
-                </Button>
+                {isAlreadyResumed ? (
+                  <Button
+                    onClick={handleBackToSession}
+                    size="lg"
+                    className="bg-textPrimary hover:from-indigo-700 hover:to-purple-700"
+                  >
+                    <MessageSquare className="h-5 w-5 mr-2" />
+                    Back to Conversation
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleResume}
+                    disabled={resuming}
+                    size="lg"
+                    className="bg-textPrimary hover:from-indigo-700 hover:to-purple-700"
+                  >
+                    {resuming ? (
+                      <>
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        Resuming...
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare className="h-5 w-5 mr-2" />
+                        Continue Free Talk
+                      </>
+                    )}
+                  </Button>
+                )}
 
                 <Button
                   onClick={() => router.push('/chat')}
@@ -275,7 +316,7 @@ export default function SummaryPage({
   }
 
   // Fallback
-  console.log('Rendering fallback state. Status:', sessionStatus, 'Has data:', !!summaryData);
+  console.log('📍 Rendering fallback state. Status:', sessionStatus, 'Has data:', !!summaryData);
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center space-y-4">

@@ -4,13 +4,19 @@ import { collection, addDoc, serverTimestamp, query, orderBy, doc, setDoc } from
 import { buildQuestionnaireItems } from '@/lib/questionnaireItems';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/lib/definitions';
+import { useSearchParams } from 'next/navigation';
 
 export function useSessionManagement() {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const isCreatingSession = useRef(false);
+  const hasInitialized = useRef(false);
+
+  // Get session ID from URL if present
+  const urlSessionId = searchParams.get('session');
 
   // Firestore query for sessions
   const sessionsQuery = useMemoFirebase(() => {
@@ -63,16 +69,21 @@ export function useSessionManagement() {
           name: sessionName,
           status: 'active',
           completionPercentage: 0,
-          totalQuestions: 0,
+          totalQuestions: 16, // PHQ-9 (9) + GAD-7 (7)
           answeredQuestions: 0,
+          sufficientDataCollected: false,
+          traumaDetected: false,
         }
       );
 
-      // Initialize questionnaire subcollection
+      // Initialize questionnaire subcollection (only PHQ-9 and GAD-7)
       const questionnaireCollection = collection(newSessionRef, 'questions');
       const questionnaires = buildQuestionnaireItems();
-
+      
+      // Only create PHQ-9 and GAD-7, not PCL-5
       for (const [assessmentName, questions] of Object.entries(questionnaires)) {
+        if (assessmentName === 'PCL-5') continue; // Skip PCL-5 initially
+        
         const questionnaireDoc = doc(questionnaireCollection, assessmentName);
         await setDoc(questionnaireDoc, {
           createdAt: serverTimestamp(),
@@ -93,18 +104,32 @@ export function useSessionManagement() {
     }
   };
 
-  // Set first session as active or create a new one if none exist
+  // Set session as active - prioritize URL param, then first session, then create new
   useEffect(() => {
-    if (sessionsLoading) return;
+    if (sessionsLoading || hasInitialized.current) return;
 
     if (sessions && sessions.length > 0) {
+      // If URL has session param, try to use that
+      if (urlSessionId) {
+        const sessionExists = sessions.some(s => s.id === urlSessionId);
+        if (sessionExists) {
+          console.log('✅ Setting active session from URL:', urlSessionId);
+          setActiveSessionId(urlSessionId);
+          hasInitialized.current = true;
+          return;
+        }
+      }
+      
+      // Otherwise use first session
       if (activeSessionId === null) {
         setActiveSessionId(sessions[0].id);
+        hasInitialized.current = true;
       }
     } else if (user && sessions && sessions.length === 0) {
       handleNewSession();
+      hasInitialized.current = true;
     }
-  }, [sessions, sessionsLoading, user, activeSessionId]);
+  }, [sessions, sessionsLoading, user, activeSessionId, urlSessionId]);
 
   return {
     activeSessionId,

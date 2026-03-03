@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, query, orderBy, doc, getDocs } from 'firebase/firestore';
 import { uploadFileToFirebase, sendFileUrlToPythonAPI } from '@/lib/client-actions';
-import { postChatMessage, updateQuestionScores } from '@/lib/actions';
+import { postChatMessage, updateQuestionScores, enablePCL5Assessment } from '@/lib/actions';
 import { useVideoRecording } from '@/hooks/useVideoRecording';
 import { RecordingOverlay } from './RecordingOverlay';
 import { MessageBubble } from './MessageBubble';
@@ -50,19 +50,41 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
 
   const sessionStatus = sessionData?.status || 'active';
   const completionPercentage = sessionData?.completionPercentage || 0;
+  const sufficientDataCollected = sessionData?.sufficientDataCollected || false;
 
-  // Show completion banner instead of auto-redirecting
-  const showCompletionBanner = sessionStatus === 'ended-complete';
+  // Show completion banner for BOTH ended-complete AND resumed statuses
+  const showCompletionBanner = (sessionStatus === 'ended-complete' || sessionStatus === 'resumed') && 
+                                (sessionData?.summaryData || sufficientDataCollected);
 
   async function loadQuestionnaireJson() {
     if (!firestore || !user || !sessionId) return null;
     const questionsCol = collection(firestore, `users/${user.uid}/sessions/${sessionId}/questions`);
     const snapshot = await getDocs(questionsCol);
-    const questionnaires: Record<string, any> = {};
+    
+    const unansweredQuestionnaires: Record<string, any> = {};
+
     snapshot.forEach(docSnap => {
-      questionnaires[docSnap.id] = docSnap.data();
-    });
-    return JSON.stringify(questionnaires);
+      const data = docSnap.data();
+      const allQuestions = data.questions || [];
+
+      const unansweredQuestions: Record<string, any> = {};
+      for (const [questionId, questionData] of Object.entries(allQuestions)) {
+      const score = (questionData as any)?.score;
+      
+      if (score === null || score === undefined) {
+        unansweredQuestions[questionId] = questionData;
+        }
+      }
+
+      if (Object.keys(unansweredQuestions).length > 0) {
+        unansweredQuestionnaires[docSnap.id] = {
+          questions: unansweredQuestions
+          };
+        }
+      });
+
+    console.log('Sending only unanswered questions:', unansweredQuestionnaires);
+    return JSON.stringify(unansweredQuestionnaires);
   }
 
   const handleRecordingStop = async (blob: Blob) => {
@@ -78,16 +100,50 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
       }
 
       const questionnaireJson = await loadQuestionnaireJson();
+      
+      // Transform messages into past_turns format
+      const past_turns: Array<{user_transcript: string; bot_reply: string}> = [];
+      
+      for (let i = 0; i < messages.length - 1; i += 2) {
+        const userMsg = messages[i];
+        const botMsg = messages[i + 1];
+        
+        if (userMsg?.role === 'user' && botMsg?.role === 'assistant') {
+          past_turns.push({
+            user_transcript: userMsg.text || '',
+            bot_reply: botMsg.text || ''
+          });
+        }
+      }
+      
+      console.log('📋 Sending past_turns:', past_turns);
+      
       const aiResponse = await sendFileUrlToPythonAPI(
         sessionId,
         `${user!.uid}`,
         uploadResult.url,
-        messages ?? [],
-        questionnaireJson ?? '{}'
+        past_turns,
+        questionnaireJson ?? '{}',
+        sessionStatus
       );
 
-      // Update scores
-      await updateQuestionScores(`${user!.uid}`, sessionId, aiResponse.diagnostic_mapping);
+       if (aiResponse.trauma_detected) {
+      console.log('Trauma detected - enabling PCL-5 assessment');
+      
+      const enableResult = await enablePCL5Assessment(user!.uid, sessionId);
+      
+        if(enableResult.success) {  
+          console.log('PCL-5 assessment enabled successfully');
+        } else {
+          console.error('Failed to enable PCL-5 assessment:', enableResult.message);
+        }
+      }
+
+      // update scores only if diagnostic data is present
+      if (aiResponse.diagnostic_mapping && Object.keys(aiResponse.diagnostic_mapping).length > 0) {
+        await updateQuestionScores(`${user!.uid}`, sessionId, aiResponse.diagnostic_mapping);
+      }
+
       await postChatMessage(user!.uid, sessionId, aiResponse);
       
     } catch (error: any) {
@@ -180,10 +236,12 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-green-900">
-                  Assessment Complete!
+                  {isResumedMode ? 'Assessment Summary Available' : 'Assessment Complete!'}
                 </h3>
                 <p className="text-xs text-green-700">
-                  Your diagnostic questionnaire is finished. View your results.
+                  {isResumedMode 
+                    ? 'Your diagnostic results are ready to view anytime.' 
+                    : 'Your diagnostic questionnaire is finished. View your results.'}
                 </p>
               </div>
             </div>

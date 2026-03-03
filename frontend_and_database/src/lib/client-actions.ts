@@ -80,32 +80,54 @@ export async function uploadFileToFirebase(file: File, userId: string) {
   }
 }
 
-export async function sendFileUrlToPythonAPI(session_id: string, user_id: string, video_url: string, past_turns: ChatMessage[], questionnaires: string) {
-    try {
-      const payload = {
-        session_id,
-        user_id,
-        video_url,
-        past_turns,
-        questionnaires,
-      };
-      console.log(payload);
-      const response = await fetch("http://localhost:8000/analyze_turn", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Backend error: ${errorText}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error("Error sending payload:", error);
-      throw error;
+export async function sendFileUrlToPythonAPI(
+  session_id: string, 
+  user_id: string, 
+  video_url: string, 
+  past_turns: Array<{user_transcript: string; bot_reply: string}>, 
+  questionnaires: string,
+  session_status: string="active"
+) {
+  try {
+    const payload = {
+      session_id,
+      user_id,
+      video_url,
+      past_turns,
+      questionnaires,
+      session_status,
+    };
+    
+    console.log('Sending to backend:', payload);
+    
+    const response = await fetch("http://localhost:8000/analyze_turn", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Backend error: ${errorText}`);
     }
+    
+    const data = await response.json();
+    console.log('✅ Backend response:', data);
+    
+    // IMPORTANT: Backend now returns:
+    // {
+    //   text: string,
+    //   diagnostic_scores: {Q1_PHQ9: 2, ...},
+    //   metadata: {...},
+    //   assemblyAI_output: {...},
+    //   deepface_output: {...}
+    // }
+    
+    return data;
+  } catch (error) {
+    console.error("Error sending payload:", error);
+    throw error;
   }
+}
