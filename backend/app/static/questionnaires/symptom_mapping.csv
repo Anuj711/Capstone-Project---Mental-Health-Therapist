@@ -1,0 +1,29 @@
+Symptom Concept,PHQ-9,GAD-7,PCL-5,Overlap Type
+Loss of interest / anhedonia,Q1,,Q12,FULL
+Depressed mood / negative emotional state,Q2,,Q11,PARTIAL
+Sleep problems,Q3,,Q20,FULL
+Low energy / fatigue,Q4,,,UNIQUE
+Appetite changes,Q5,,,UNIQUE
+Worthlessness / self-blame,Q6,,"Q9, Q10",PARTIAL
+Concentration problems,Q7,,Q19,FULL
+Psychomotor agitation / restlessness,Q8,Q5,,PARTIAL
+Self-harm / death thoughts,Q9,,,UNIQUE
+General anxiety / nervousness,,Q1,,UNIQUE
+Uncontrollable worry,,Q2,,UNIQUE
+Excessive worry,,Q3,,UNIQUE
+Difficulty relaxing,,Q4,,UNIQUE
+Irritability,,Q6,Q15,FULL
+Fear something awful will happen,,Q7,"Q17, Q18",PARTIAL
+Trauma memories,,,Q1,UNIQUE
+Trauma dreams,,,Q2,UNIQUE
+Flashbacks / reliving trauma,,,Q3,UNIQUE
+Emotional distress when reminded,,,Q4,UNIQUE
+Physical distress when reminded,,,Q5,UNIQUE
+Avoid trauma thoughts,,,Q6,UNIQUE
+Avoid trauma reminders,,,Q7,UNIQUE
+Trauma memory gaps,,,Q8,UNIQUE
+Social detachment,,,Q13,UNIQUE
+Loss of positive emotions,,,Q14,UNIQUE
+Risky / self-destructive behavior,,,Q16,UNIQUE
+Hypervigilance,,,Q17,UNIQUE
+Startle response,,,Q18,UNIQUE

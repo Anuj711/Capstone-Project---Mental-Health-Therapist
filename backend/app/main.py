@@ -81,9 +81,20 @@ def home():
 def analyze_turn():
     data = request.get_json()
 
-    questionnaires = data.get("questionnaires", {})
-    past_turns = data.get("past_turns", [])
+    # questionnaires = data.get("questionnaires", {})
+    # past_turns = data.get("past_turns", [])
+
+    # NEW ARCHITECTURE: need to instead store the following
+    # - rolling summary
+    # - map of questions answered and their answers
+    # - scores
+    # - answered questions
+    # - question queue
+    # - current question index
+    # - mode
     video_file = data.get("video_url", {})
+    rolling_summary = data.get("rolling_summary", {})
+    answered_questions = data.get("video_url", {})
     session_id = data.get("session_id", "")
     user_id = data.get("user_id", "")
     
