@@ -6,24 +6,17 @@ import { Loader2, Shield, Video, CheckCircle2, FileText } from 'lucide-react';
 import { ChatMessage } from '@/lib/definitions';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, query, orderBy, doc, getDocs } from 'firebase/firestore';
+import { useUser, useFirestore, useMemoFirebase, useDoc, useCollection } from '@/firebase';
+import { collection, query, orderBy, doc } from 'firebase/firestore';
 import { uploadFileToFirebase, sendFileUrlToPythonAPI } from '@/lib/client-actions';
-import { postChatMessage, updateQuestionScores, enablePCL5Assessment } from '@/lib/actions';
+import { postChatMessage, enablePCL5Assessment } from '@/lib/actions';
 import { useVideoRecording } from '@/hooks/useVideoRecording';
 import { RecordingOverlay } from './RecordingOverlay';
 import { MessageBubble } from './MessageBubble';
 import { useRouter } from 'next/navigation';
 
-const assistantWelcomeMessage: ChatMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  text: "Hello! I'm here to listen and support you. Record a video note to share how you're feeling.",
-  timestamp: new Date(),
-};
-
 export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sessionName: string }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([assistantWelcomeMessage]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const { toast } = useToast();
   const { user } = useUser();
   const firestore = useFirestore();
@@ -56,36 +49,21 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
   const showCompletionBanner = (sessionStatus === 'ended-complete' || sessionStatus === 'resumed') && 
                                 (sessionData?.summaryData || sufficientDataCollected);
 
-  async function loadQuestionnaireJson() {
-    if (!firestore || !user || !sessionId) return null;
-    const questionsCol = collection(firestore, `users/${user.uid}/sessions/${sessionId}/questions`);
-    const snapshot = await getDocs(questionsCol);
-    
-    const unansweredQuestionnaires: Record<string, any> = {};
-
-    snapshot.forEach(docSnap => {
-      const data = docSnap.data();
-      const allQuestions = data.questions || [];
-
-      const unansweredQuestions: Record<string, any> = {};
-      for (const [questionId, questionData] of Object.entries(allQuestions)) {
-      const score = (questionData as any)?.score;
-      
-      if (score === null || score === undefined) {
-        unansweredQuestions[questionId] = questionData;
-        }
+  useEffect(() => {
+    if (initialMessages) {
+      if (initialMessages.length > 0) {
+        setMessages(initialMessages);
+      } else {
+        const firstGreeting: ChatMessage = {
+          id: 'welcome',
+          role: 'assistant',
+          text: "Welcome. I’m here to listen and support you. As we begin, it can be helpful to look back at the last couple of weeks together. Have you noticed yourself struggling with a lack of interest lately, or perhaps feeling like the things that usually bring you joy just aren't sparking that same pleasure?",
+          timestamp: new Date(),
+        };
+        setMessages([firstGreeting]);
       }
-
-      if (Object.keys(unansweredQuestions).length > 0) {
-        unansweredQuestionnaires[docSnap.id] = {
-          questions: unansweredQuestions
-          };
-        }
-      });
-
-    console.log('Sending only unanswered questions:', unansweredQuestionnaires);
-    return JSON.stringify(unansweredQuestionnaires);
-  }
+    }
+  }, [initialMessages]);
 
   const handleRecordingStop = async (blob: Blob) => {
     if (!blob) return;
@@ -99,50 +77,32 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         throw new Error(uploadResult.message || 'File upload failed.');
       }
 
-      const questionnaireJson = await loadQuestionnaireJson();
-      
-      // Transform messages into past_turns format
-      const past_turns: Array<{user_transcript: string; bot_reply: string}> = [];
-      
-      for (let i = 0; i < messages.length - 1; i += 2) {
-        const userMsg = messages[i];
-        const botMsg = messages[i + 1];
-        
-        if (userMsg?.role === 'user' && botMsg?.role === 'assistant') {
-          past_turns.push({
-            user_transcript: userMsg.text || '',
-            bot_reply: botMsg.text || ''
-          });
-        }
-      }
-      
-      console.log('📋 Sending past_turns:', past_turns);
-      
+      // Send current state to backend
+      const currentAnswers = sessionData?.user_answers || [];
+      const currentSummary = sessionData?.rolling_summary || "";
+      const currentScores = sessionData?.diagnostic_scores || {};
+
       const aiResponse = await sendFileUrlToPythonAPI(
         sessionId,
         `${user!.uid}`,
         uploadResult.url,
-        past_turns,
-        questionnaireJson ?? '{}',
+        currentAnswers,
+        currentSummary,
+        currentScores,
         sessionStatus
       );
 
-       if (aiResponse.trauma_detected) {
-      console.log('Trauma detected - enabling PCL-5 assessment');
+      if (aiResponse.trauma_detected) {
+        console.log('Trauma detected - enabling PCL-5 assessment');
       
-      const enableResult = await enablePCL5Assessment(user!.uid, sessionId);
-      
-        if(enableResult.success) {  
-          console.log('PCL-5 assessment enabled successfully');
-        } else {
-          console.error('Failed to enable PCL-5 assessment:', enableResult.message);
+        const enableResult = await enablePCL5Assessment(user!.uid, sessionId);
+        
+          if(enableResult.success) {  
+            console.log('PCL-5 assessment enabled successfully');
+          } else {
+            console.error('Failed to enable PCL-5 assessment:', enableResult.message);
+          }
         }
-      }
-
-      // update scores only if diagnostic data is present
-      if (aiResponse.diagnostic_mapping && Object.keys(aiResponse.diagnostic_mapping).length > 0) {
-        await updateQuestionScores(`${user!.uid}`, sessionId, aiResponse.diagnostic_mapping);
-      }
 
       await postChatMessage(user!.uid, sessionId, aiResponse);
       
@@ -172,26 +132,15 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
   } = useVideoRecording(handleRecordingStop);
 
   useEffect(() => {
-    if (initialMessages) {
-      setMessages(initialMessages.length > 0 ? initialMessages : [assistantWelcomeMessage]);
-    }
-  }, [initialMessages]);
-
-  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleRecordClick = async () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      await startRecording();
-    }
+    if (isRecording) stopRecording();
+    else await startRecording();
   };
 
-  const handleViewResults = () => {
-    router.push(`/session-summary/${sessionId}`);
-  };
+  const handleViewResults = () => router.push(`/session-summary/${sessionId}`);
 
   const canRecord = sessionStatus === 'active' || sessionStatus === 'resumed';
   const isResumedMode = sessionStatus === 'resumed';

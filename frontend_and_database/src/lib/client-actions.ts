@@ -1,10 +1,10 @@
 'use client';
 
-import { getFirestore, collection, doc, deleteDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, deleteDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Message } from '@/types/messages';
-import { ChatMessage } from '@/lib/definitions';
+
+const db = getFirestore(getApp());
 
 /**
  * Deletes a journal entry using the client Firestore SDK.
@@ -13,7 +13,6 @@ import { ChatMessage } from '@/lib/definitions';
  */
 export async function deleteJournalEntryClient(userId: string, entryId: string) {
   try {
-    const db = getFirestore(getApp());
     const ref = doc(db, `users/${userId}/journalEntries/${entryId}`);
     await deleteDoc(ref);
     return { success: true, message: 'Journal entry deleted successfully.' };
@@ -35,9 +34,8 @@ export async function updateJournalEntryClient(
   data: { content: string; mood: string }
 ) {
   try {
-    const db = getFirestore(getApp());
     const entryRef = doc(db, `users/${userId}/journalEntries/${entryId}`);
-    
+
     await updateDoc(entryRef, {
       content: data.content,
       mood: data.mood,
@@ -51,6 +49,7 @@ export async function updateJournalEntryClient(
     return { success: false, message };
   }
 }
+
 
 /**
  * Uploads a file to Firebase Cloud Storage and returns its download URL.
@@ -73,10 +72,7 @@ export async function uploadFileToFirebase(file: File, userId: string) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown storage error occurred.";
     console.error('File upload error:', message);
-    return {
-      success: false,
-      message: message,
-    };
+    return { success: false, message: message };
   }
 }
 
@@ -84,47 +80,44 @@ export async function sendFileUrlToPythonAPI(
   session_id: string, 
   user_id: string, 
   video_url: string, 
-  past_turns: Array<{user_transcript: string; bot_reply: string}>, 
-  questionnaires: string,
+  user_answers: Array<{q_id: string; user_answer: string}>, 
+  rolling_summary: string,
+  diagnostic_scores: Record<string, number>,
   session_status: string="active"
 ) {
   try {
     const payload = {
-      session_id,
-      user_id,
-      video_url,
-      past_turns,
-      questionnaires,
-      session_status,
+      session_id, user_id, video_url, user_answers, 
+      rolling_summary, diagnostic_scores, session_status
     };
-    
-    console.log('Sending to backend:', payload);
     
     const response = await fetch("http://localhost:8000/analyze_turn", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Backend error: ${errorText}`);
-    }
+    if (!response.ok) throw new Error(`Backend error: ${await response.text()}`);
     
     const data = await response.json();
     console.log('✅ Backend response:', data);
+    const sessionRef = doc(db, `users/${user_id}/sessions/${session_id}`);
     
-    // IMPORTANT: Backend now returns:
-    // {
-    //   text: string,
-    //   diagnostic_scores: {Q1_PHQ9: 2, ...},
-    //   metadata: {...},
-    //   assemblyAI_output: {...},
-    //   deepface_output: {...}
-    // }
-    
+    const updates: any = {
+      rolling_summary: data.rolling_summary,
+      user_answers: data.user_answers,
+      status: data.session_status, // This triggers the ending banner
+      sufficientDataCollected: data.sufficientDataCollected,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (data.diagnostic_scores) {
+      Object.entries(data.diagnostic_scores).forEach(([qId, score]) => {
+        updates[`diagnostic_scores.${qId}`] = increment(score as number);
+      });
+    }
+
+    await updateDoc(sessionRef, updates);
     return data;
   } catch (error) {
     console.error("Error sending payload:", error);

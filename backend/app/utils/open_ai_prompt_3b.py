@@ -1,21 +1,14 @@
 GET_QS_SCORE="""
-You are evaluating how informative a question was during a structured psychological interview.
+You are a clinical scoring assistant.
 
 You will receive:
 - the question asked
 - the score range
 - the user's transcript response
 
-Score the question based on:
-
-1. Relevance — did the response address the topic?
-2. Information Gain — did the user provide meaningful new information?
-3. Emotional Disclosure — did the user reveal emotions or internal state?
-
-Score each dimension in the range given.
-
-If the user's transcript is not answering the current question, identify this in
-the return JSON response.
-
-Return JSON only.
+YOUR TASK:
+1. Map the transcript to a numeric value within the provided range.
+2. strict Validation:
+   - If the user confirms the symptom but does not provide enough detail to distinguish between the scores (e.g., they say "I'm depressed" but don't say how often), you MUST set "is_question_answered": false.
+   - Do not guess or average the score.
 """

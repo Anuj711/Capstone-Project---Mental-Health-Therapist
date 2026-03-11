@@ -35,9 +35,7 @@ def update_rolling_info_and_get_reply(
     }
     """
 
-    print(f"\n{'='*80}")
     print(f"[DEBUG] SESSION STATUS RECEIVED: '{session_status}'")
-    print(f"{'='*80}\n")
     
     user_transcript = assembly_data.get("transcript", "")
     sentiment = assembly_data.get("sentiment", "")
@@ -94,10 +92,10 @@ def update_rolling_info_and_get_reply(
             {next_question}
 
             Return JSON in this format:
-
             {{
                 "bot_reply": "...",
                 "updated_summary": "...",
+                "needs_followup": boolean,
                 "updated_user_answers": [
                     {{
                         "question_id": "...",
@@ -127,10 +125,10 @@ def update_rolling_info_and_get_reply(
 
         # CLEAN DATA
         raw = response.choices[0].message.content.strip()
-        print("\n" + "="*80)
-        print("[DEBUG] FULL RAW RESPONSE:")
+        print("\n" + "."*80)
+        print("[DEBUG] FULL RAW RESPONSE FOR 3A:")
         print(raw)
-        print("="*80 + "\n")
+        print("."*80 + "\n")
 
         # Remove markdown code blocks if present
         cleaned = raw
@@ -171,6 +169,9 @@ def update_rolling_info_and_get_reply(
                     if not parsed.get("contradictions"):
                         print("[WARNING] Missing contradictions, skipping for now")
                         parsed["contradictions"] = None
+
+                    if parsed.get("needs_followup") is None:
+                        parsed["needs_followup"] = False
 
                 return parsed
                 
@@ -242,13 +243,8 @@ def get_current_question_score(transcript, current_question, score_range):
             SCORE RANGE:
             {score_range}
 
-            Return JSON:
-
-            {{
-                "score": ...,
-                "is_question_answered": True/False,
-                "reasoning": "short explanation"
-            }}
+            
+            Return JSON: {{"is_question_answered": boolean, "score": int or null, "reason": "missing_metric" | "off_topic" | "complete"}}
         """
         
         # TODO: determine right temperature for 3b + remove max_tokens?
@@ -264,7 +260,7 @@ def get_current_question_score(transcript, current_question, score_range):
         # CLEAN DATA
         raw = response.choices[0].message.content.strip()
         print("\n" + "="*80)
-        print("[DEBUG] FULL RAW RESPONSE:")
+        print("[DEBUG] FULL RAW RESPONSE FOR 3B:")
         print(raw)
         print("="*80 + "\n")
 

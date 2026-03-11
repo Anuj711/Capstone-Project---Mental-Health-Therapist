@@ -36,6 +36,7 @@ def prepare_data_for_json(data):
 def home():
     return "Capstone API is running!"
 
+# TODO: try to test and modify prompt to get accurate score
 @app.route("/analyze_turn", methods=["POST"])
 def analyze_turn():
     """
@@ -45,7 +46,8 @@ def analyze_turn():
             "session_status": <active/resumed>,
             "user_answers": < [ {Q_ID: user answer} ] >,
             "rolling summary": <summary of user answers for context>,
-            "diagnostic_scores": < ASSESSMENT_QID: { score: 0 } >
+            "diagnostic_scores": < ASSESSMENT_QID: { score: 0 } >,
+            "sufficientDataCollected": False/True
         }
 
     @return JSON payload to be stored in Firestore.
@@ -64,23 +66,23 @@ def analyze_turn():
             "deepface_output": <emotion scores>,
             "diagnostic_match": <true/false>,
             "emergency": <true/false>,
-            "triggered word": <word> [optional]
+            "triggered word": <word> [optional],
             "trauma_detected": <true/false>,
+            "sufficientDataCollected": True/False
         }
     """
-    # TODO: check if QUESTION_TRACKER["current_qs_index"] is none then handle questionnaire over scenario
 
+    print("\n" + "="*80)
+    print(f"[DEBUG] PROCESSING CURRENT QS ID: {QUESTION_TRACKER['current_qs_id']}")
+    print("="*80 + "\n")
+    
+    # TODO: check if QUESTION_TRACKER["current_qs_index"] is none then handle questionnaire over scenario
     # TODO: (nice to have) add a JSON Scehma to make sure we always return the above formatted JSON payload
     data = request.get_json()
-
-    # ARCHITECTURE v2: need to instead get the following
-    # - video file
-    # - rolling summary
-    # - user answers (Q_ID, question, brief answer)
-    # - session_status (active / resumed)
     video_file = data.get("video_url", "")
-    rolling_summary = data.get("rolling_summary", "")
-    user_answers = data.get("user_answers", [])
+    rolling_summary = data.get("rolling_summary") or ""
+    user_answers = data.get("user_answers") or []
+    existing_scores = data.get("diagnostic_scores") or {}
     session_status = data.get("session_status", "active")
 
     if not video_file:
@@ -106,19 +108,22 @@ def analyze_turn():
                 "audio_video_alignment": "aligned",
                 "confidence_level": "high"
             },
-            "user_answers": None,
-            "rolling_summary": None,
+            "user_answers": user_answers,
+            "rolling_summary": rolling_summary,
             "assemblyAI_output": assembly_data,
             "deepface_output": deepface_data,
             "diagnostic_match": False,
             "emergency": True,
             "triggered_word": word,
-            "trauma_detected": False
+            "trauma_detected": False,
+            "session_status": "ended-complete",
+            "sufficientDataCollected": True
         }
         return jsonify(emergency_response), 200
 
-    # Step 2: Get current and nextion questions
-    current_question_text = get_question_data(QUESTION_TRACKER["current_qs_id"])
+    # Step 2: Get current and next questions
+    current_qid = QUESTION_TRACKER.get("current_qs_id")
+    current_question_text = get_question_data(current_qid)
     next_question_text = get_question_data(QUESTION_TRACKER["next_qs_id"])
 
     # Step 3a: Update rolling summary and user answers
@@ -127,66 +132,76 @@ def analyze_turn():
         user_answers, QUESTION_TRACKER["current_qs_id"],
         current_question_text, next_question_text, session_status)
 
-    # TODO: print output and check if updated rolling summary includes previous
-    # rolling summary or if it is just what we append to previous rolling summmary,
-    # same for answered questions.
-    rolling_summary += model_output.get("updated_summary", "")
-    user_answers.extend(model_output.get("updated_user_answers", []))
-    bot_reply = model_output.get("bot_reply", "")
-    contradictions = model_output.get("contradictions")
-
-    if contradictions and contradictions.get("contradicting_question_ids"):
-        for q in contradictions.get("contradicting_question_ids"):
-            # TODO: here we are assuming openai returns the "question_id" in the formatting
-            # we provided it in. If it hallucenates, this might be a weird formatting so needs
-            # to be error checked and worked around before appending.
-            append_question_to_unanswered_list(q)
-            # TODO: do we just add the questions openai returns or also add the ones from symptom
-            # overlap map?
+    updated_summary = model_output.get("updated_summary") or ""
+    updated_answers = model_output.get("updated_user_answers") or []
     
+    rolling_summary += updated_summary
+    user_answers.extend(updated_answers)
+    bot_reply = model_output.get("bot_reply", "")
+
+    contradictions = model_output.get("contradictions") or {}
+    is_contradictory = contradictions.get("contradictory") or False
+    contradicting_ids = contradictions.get("contradicting_question_ids") or []
+
     # Step 3b: Get score for current question
-    if session_status != "resumed":
+    needs_followup = model_output.get("needs_followup", False)
+    is_answered = False
+    current_score = 0
+    score_output = {}
+    if not needs_followup:
         score_output = get_current_question_score(
-            transcript, current_question_text, get_questionnaire_score_range(QUESTION_TRACKER["current_qs_id"]))
-
-        if score_output.get("is_question_answered"):
-            current_question_score = score_output.get("score")
-            current_question_score_reasoning = score_output.get("reasoning")
-            mark_question_answered(QUESTION_TRACKER["current_qs_id"])
-        else:
-            append_question_to_unanswered_list(QUESTION_TRACKER["current_qs_id"])
-
-    # Step 4: Update saved scores based on symptom overlap map
-    overlapping_qs_scores = get_overlapping_updates(QUESTION_TRACKER["current_qs_id"], current_question_score)
-
-    # Step 5: TODO: send updates to firestore
-    if session_status == "resumed":
-        mode_indicator = "free talk"
-        print("[DEBUG] Using FREE-TALK mode")
+            transcript, 
+            current_question_text, 
+            get_questionnaire_score_range(current_qid)
+        )
+        is_answered = score_output.get("is_question_answered", False)
+        current_score = score_output.get("score", 0)
     else:
-        mode_indicator = "diagnostic"
-        print("[DEBUG] Using DIAGNOSTIC mode")
+        print(f"[DEBUG] Skipping scoring because needs_followup is TRUE")
 
-    """
-    rolling_summary = data.get("rolling_summary", {})
-    user_answers = data.get("user_answers", {})
-    scores = data.get("scores", {})
-    question_queue = data.get("question_queue", {})
-    current_question_index = data.get("current_question_index", {})
-    mode = data.get("mode", {})
-    """
+    # Step 4: update scores
+    score_updates_for_firestore = {}
+    # RULE 1: Progress only if answered, not contradictory, and no follow-up needed
+    if is_answered and not is_contradictory and current_qid not in contradicting_ids:
+        mark_question_answered(current_qid)
+        score_updates_for_firestore[current_qid] = current_score
+    
+        # Handle overlaps
+        overlaps = get_overlapping_updates(current_qid, current_score)
+        if isinstance(overlaps, dict):
+            score_updates_for_firestore.update(overlaps)
+            
+        # Step 6: update current and next question ids
+        QUESTION_TRACKER["current_qs_index"] += 1
+        QUESTION_TRACKER["next_qs_index"] += 1
+    else:
+        # RULE 2: If unanswered, contradictory, or needs follow-up, re-add to unanswered list
+        append_question_to_unanswered_list(current_qid)
+        print(f"[DEBUG] STAYING ON QUESTION {current_qid} FOR FOLLOW-UP")
 
-    # Step 6: update current and next question ids
-    QUESTION_TRACKER["current_qs_index"] = QUESTION_TRACKER["current_qs_index"] + 1
-    QUESTION_TRACKER["next_qs_index"] = QUESTION_TRACKER["next_qs_index"] + 1
+    # RULE 3: Handle past contradictions
+    for q_id in contradicting_ids:
+        if q_id != current_qid:
+            append_question_to_unanswered_list(q_id)
+            prev_val = existing_scores.get(q_id, 0)
+            if prev_val != 0:
+                score_updates_for_firestore[q_id] = -prev_val
+
+    # Final Check: Are we out of questions?
+    if not current_qid and session_status != "resumed":
+        final_session_status = "ended-complete"
+        sufficient_data = True
+        bot_reply = "We've covered all the specific areas I wanted to check on today. Thank you for being so open with me. You can now view your session summary."
+    else:
+        final_session_status = session_status
+        sufficient_data = data.get("sufficientDataCollected", False)
+
+    # Step 5: Mode indicator
+    mode_indicator = "free talk" if session_status == "resumed" else "diagnostic"
 
     # Step 7: Format response for Firestore
-    diagnostic_scores = data.get("diagnostic_scores") or []
-    diagnostic_scores.append({QUESTION_TRACKER["current_qs_id"] : current_question_score})
-    diagnostic_scores.extend(overlapping_qs_scores)
-    
-    # Check if trauma was mentioned in transcript (keyword-based detection)
-    transcript_lower = assembly_data.get("transcript", "").lower()
+    # Trauma detection logic
+    transcript_lower = transcript.lower()
     trauma_keywords = [
         'died', 'death', 'passed away', 'funeral', 'lost my', 'lost a', 'killed',
         'abuse', 'abused', 'assault', 'assaulted', 'rape', 'raped', 'molest',
@@ -199,37 +214,12 @@ def analyze_turn():
     ]
     
     trauma_mentioned = any(keyword in transcript_lower for keyword in trauma_keywords)
-    
-    # Check if PCL-5 questions were scored
-    has_pcl5_scores = any('PCL5' in key for key in diagnostic_scores.keys())
-    
-    # Trauma is detected if EITHER mentioned OR PCL-5 scored
+    has_pcl5_scores = any('PCL5' in key for key in score_updates_for_firestore.keys())
     trauma_detected = trauma_mentioned or has_pcl5_scores
-    
-    if trauma_mentioned and not has_pcl5_scores:
-        print(f"\n[TRAUMA] Keyword detected in transcript: '{transcript[:100]}'")
-        matching_keywords = [k for k in trauma_keywords if k in transcript_lower]
-        print(f"[TRAUMA] Matching keywords: {matching_keywords}")
-    
-    # Check if PCL-5 exists in questionnaires
-    has_pcl5_questionnaire = True
-    
-    # Log trauma detection
-    if trauma_detected and not has_pcl5_questionnaire:
-        print("\n" + "="*80)
-        print("TRAUMA DETECTED - PCL-5 should be enabled")
-        if trauma_mentioned:
-            print(f"   Reason: Trauma keywords in transcript")
-            matching_keywords = [k for k in trauma_keywords if k in transcript_lower]
-            print(f"   Keywords: {matching_keywords}")
-        if has_pcl5_scores:
-            print(f"   PCL-5 scores found: {[k for k in diagnostic_scores.keys() if 'PCL5' in k]}")
-        print("="*80 + "\n")
-    
-    # Determine audio/video alignment
+
+    # Sentiment and Alignment
     audio_sentiment = assembly_data.get("sentiment", "NEUTRAL").lower()
     audio_confidence = assembly_data.get("sentiment_confidence", 0)
-    
     emotions = deepface_data if isinstance(deepface_data, dict) else {}
     dominant_emotion = max(emotions.items(), key=lambda x: x[1])[0] if emotions else "neutral"
     
@@ -241,22 +231,14 @@ def analyze_turn():
     elif (audio_sentiment == "negative" and dominant_emotion in negative_emotions) or \
          (audio_sentiment == "positive" and dominant_emotion in positive_emotions):
         alignment = "aligned"
-    elif audio_sentiment == "neutral":
-        alignment = "aligned"
     else:
-        alignment = "mismatched"
+        alignment = "neutral" if audio_sentiment == "neutral" else "mismatched"
     
-    # Determine confidence level
-    if audio_confidence >= 0.8:
-        confidence_level = "high"
-    elif audio_confidence >= 0.6:
-        confidence_level = "medium"
-    else:
-        confidence_level = "low"
+    confidence_level = "high" if audio_confidence >= 0.8 else "medium" if audio_confidence >= 0.6 else "low"
 
     response_payload = {
         "text": bot_reply,
-        "diagnostic_scores": diagnostic_scores,
+        "diagnostic_scores": score_updates_for_firestore,
         "metadata": {
             "conversation_type": mode_indicator,
             "crisis_detected": False,
@@ -267,10 +249,18 @@ def analyze_turn():
         "rolling_summary": rolling_summary,
         "assemblyAI_output": assembly_data,
         "deepface_output": deepface_data,
-        "diagnostic_match": len(diagnostic_scores) > 0,
+        "diagnostic_match": len(score_updates_for_firestore) > 0,
         "emergency": False,
         "trauma_detected": trauma_detected,
+        "session_status": final_session_status,
+        "sufficientDataCollected": sufficient_data,
     }
+
+    print("\n" + "."*80)
+    print("[DEBUG] RETURNING FINAL PAYLOAD:")
+    print(response_payload)
+    print("."*80 + "\n")
+
 
     return jsonify(response_payload), 200
 
