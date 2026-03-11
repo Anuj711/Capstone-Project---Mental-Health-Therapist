@@ -170,10 +170,19 @@ def analyze_turn():
         overlaps = get_overlapping_updates(current_qid, current_score)
         if isinstance(overlaps, dict):
             score_updates_for_firestore.update(overlaps)
-            
+        print("Reaches updating curretn and next question ids:\n")
+        print("Before updating - current qs index:", QUESTION_TRACKER["current_qs_index"])
+        print("Before updating - next qs index:", QUESTION_TRACKER["next_qs_index"])
+        print("Before updating - current qs id:", QUESTION_TRACKER["current_qs_id"])
+        print("Before updating - next qs id:", QUESTION_TRACKER["next_qs_id"])
+
         # Step 6: update current and next question ids
         QUESTION_TRACKER["current_qs_index"] += 1
         QUESTION_TRACKER["next_qs_index"] += 1
+        print("After updating - current qs index:", QUESTION_TRACKER["current_qs_index"])
+        print("After updating - next qs index:", QUESTION_TRACKER["next_qs_index"])
+        print("After updating - current qs id:", QUESTION_TRACKER["current_qs_id"])
+        print("After updating - next qs id:", QUESTION_TRACKER["next_qs_id"])
     else:
         # RULE 2: If unanswered, contradictory, or needs follow-up, re-add to unanswered list
         append_question_to_unanswered_list(current_qid)
@@ -199,11 +208,12 @@ def analyze_turn():
     # Step 5: Mode indicator
     mode_indicator = "free talk" if session_status == "resumed" else "diagnostic"
 
+    #TODO: Need to use AI to check this, the hard-coded trauma keywords are missing a lot of loopholes and it's dangerous.
     # Step 7: Format response for Firestore
     # Trauma detection logic
     transcript_lower = transcript.lower()
     trauma_keywords = [
-        'died', 'death', 'passed away', 'funeral', 'lost my', 'lost a', 'killed',
+        'died', 'death', 'passed away', 'funeral', 'lost my', 'lost a', 'killed', 'kill myself'
         'abuse', 'abused', 'assault', 'assaulted', 'rape', 'raped', 'molest',
         'accident', 'crash', 'injured', 'hurt badly', 'hospitalized',
         'attacked', 'violence', 'witnessed', 'saw someone die', 'saw someone get',
