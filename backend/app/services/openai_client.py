@@ -109,7 +109,10 @@ def call_openai_therapy_model(assembly_data, deepface_data, questionnaires, past
         task_instructions = "Remember: FREE-TALK mode - be supportive, don't ask diagnostic questions, return empty diagnostic_mapping"
     else:
         task_instructions = """1. Look at PAST CONVERSATION above - what symptoms did you already ask about?
-2. Score ALL symptoms in the current user message (including score 0 for "no")
+2. Score ONLY symptoms the user explicitly mentioned in the current user message (including score 0 for "no")    
+         - Score 0 ONLY if the user specifically denied that symptom (e.g. "no I sleep fine")
+         - If a symptom was NEVER mentioned, do NOT include it in diagnostic_mapping at all
+         - NEVER score unmentioned symptoms just because the user seems happy or well
 3. Ask about ONE COMPLETELY NEW symptom you haven't asked about yet
 4. Return ONLY valid JSON
 
