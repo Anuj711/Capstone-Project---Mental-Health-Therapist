@@ -82,13 +82,14 @@ export async function sendFileUrlToPythonAPI(
   video_url: string, 
   user_answers: Array<{q_id: string; user_answer: string}>, 
   rolling_summary: string,
+  last_bot_reply: string,
   diagnostic_scores: Record<string, number>,
   session_status: string="active"
 ) {
   try {
     const payload = {
       session_id, user_id, video_url, user_answers, 
-      rolling_summary, diagnostic_scores, session_status
+      rolling_summary, last_bot_reply, diagnostic_scores, session_status
     };
     
     const response = await fetch("http://localhost:8000/analyze_turn", {
@@ -106,11 +107,11 @@ export async function sendFileUrlToPythonAPI(
     const updates: any = {
       rolling_summary: data.rolling_summary,
       user_answers: data.user_answers,
-      status: data.session_status, // This triggers the ending banner
       sufficientDataCollected: data.sufficientDataCollected,
       updatedAt: serverTimestamp(),
     };
 
+    // TODO: update diagnostic_scores and fix completion percentage
     if (data.diagnostic_scores) {
       Object.entries(data.diagnostic_scores).forEach(([qId, score]) => {
         updates[`diagnostic_scores.${qId}`] = increment(score as number);
@@ -121,6 +122,25 @@ export async function sendFileUrlToPythonAPI(
     return data;
   } catch (error) {
     console.error("Error sending payload:", error);
+    throw error;
+  }
+}
+
+export async function sendStatusUpdates(
+  session_id: string, 
+  user_id: string,
+  new_status: string
+) {
+  try {
+    const sessionRef = doc(db, `users/${user_id}/sessions/${session_id}`);
+
+    const updates: any = {
+      status: new_status,
+      updatedAt: serverTimestamp(),
+    };
+    await updateDoc(sessionRef, updates);
+  } catch (error) {
+    console.error("Error updating status:", error);
     throw error;
   }
 }

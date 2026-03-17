@@ -15,7 +15,8 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def update_rolling_info_and_get_reply(
         assembly_data, deepface_data, rolling_summary, user_answers,
-        current_qs_id, current_question, next_question, session_status="active"):
+        score_range, current_qid, current_question, next_question, 
+        previous_bot_reply=None, session_status="active"):
     """
     @return
     {
@@ -31,7 +32,9 @@ def update_rolling_info_and_get_reply(
         "contradictions": {
             "contradicting_question_ids": ["..."],
             "reason": "..."
-        }
+        },
+        "is_emergency": boolean,
+        "trigger_word": string
     }
     """
 
@@ -64,7 +67,9 @@ def update_rolling_info_and_get_reply(
             Return JSON in this format:
             {{
                 "updated_summary": "...",
-                "bot_reply": "..."
+                "bot_reply": "...",
+                "is_emergency": boolean,
+                "trigger_word": string
             }}
         """
     else: # active
@@ -83,10 +88,13 @@ def update_rolling_info_and_get_reply(
             {user_answers}
 
             CURRENT QUESTION ID:
-            {current_qs_id}
+            {current_qid}
 
             CURRENT QUESTION BEING ASKED:
             {current_question}
+
+            METRICS TO SCORE USER'S ANSWER:
+            {score_range}
 
             NEXT QUESTION TO BE ASKED:
             {next_question}
@@ -106,21 +114,28 @@ def update_rolling_info_and_get_reply(
                 "contradictions": {{
                     "contradicting_question_ids": ["..."],
                     "reason": "..."
-                }}
+                }},
+                "is_emergency": boolean,
+                "trigger_word": string
             }}
             """
 
     try:
         print(f"[DEBUG] Calling OpenAI with transcript: {user_transcript[:100]}...")
         
+        # Build message history with Assistant role for short-term memory
+        messages = [{"role": "system", "content": main_prompt}]
+        
+        if previous_bot_reply:
+            messages.append({"role": "assistant", "content": previous_bot_reply})
+            
+        messages.append({"role": "user", "content": message})
+
         # TODO: determine right temperature for 3a + remove max_tokens?
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            temperature=0.5,
-            messages=[
-                {"role": "system", "content": main_prompt},
-                {"role": "user", "content": message}
-            ]
+            model="gpt-4o",
+            temperature=0.2,
+            messages=messages
         )
 
         # CLEAN DATA
@@ -150,6 +165,14 @@ def update_rolling_info_and_get_reply(
                 print("[DEBUG] JSON parsed successfully")
                 
                 # Validate structure
+                if not parsed.get("is_emergency"):
+                    print("[WARNING] Missing is_emergency field")
+                    parsed["is_emergency"] = False
+
+                if not parsed.get("trigger_word"):
+                    print("[WARNING] Missing trigger_word field")
+                    parsed["trigger_word"] = ""
+
                 if not parsed.get("bot_reply"):
                     print("[WARNING] Missing bot_reply field")
                     if session_status == "resumed":
@@ -197,13 +220,25 @@ def update_rolling_info_and_get_reply(
             return {
                 "bot_reply": "I'm here to listen. What would you like to talk about?",
                 "updated_summary": None,
-                "updated_user_answers": None
+                "updated_user_answers": None,
+                "contradictions": {
+                    "contradicting_question_ids": [],
+                    "reason": ""
+                },
+                "is_emergency": False,
+                "trigger_word": ""
             }
         else:
             return {
                 "bot_reply": "How's your sleep been lately?",
                 "updated_summary": None,
-                "updated_user_answers": None
+                "updated_user_answers": None,
+                "contradictions": {
+                    "contradicting_question_ids": [],
+                    "reason": ""
+                },
+                "is_emergency": False,
+                "trigger_word": ""
             }
         
     except Exception as e:
@@ -213,22 +248,32 @@ def update_rolling_info_and_get_reply(
             return {
                 "bot_reply": "I'm here for you. What's been on your mind?",
                 "updated_summary": None,
-                "updated_user_answers": None
+                "updated_user_answers": None,
+                "contradictions": {
+                    "contradicting_question_ids": [],
+                    "reason": ""
+                },
+                "is_emergency": False,
+                "trigger_word": ""
             }
         else:
             return {
                 "bot_reply": "What about your energy levels?",
                 "updated_summary": None,
-                "updated_user_answers": None
+                "updated_user_answers": None,
+                "contradictions": {
+                    "contradicting_question_ids": [],
+                    "reason": ""
+                },
+                "is_emergency": False,
+                "trigger_word": ""
             }
-
-def get_current_question_score(transcript, current_question, score_range):
+def get_current_question_score(transcript, rolling_summary, current_question, score_range):
     """
     @return
     {
         "score": ...,
-        "is_question_answered": True/False,
-        "reasoning": "..."
+        "is_question_answered": True/False
     }
     """
 
@@ -240,11 +285,14 @@ def get_current_question_score(transcript, current_question, score_range):
             USER RESPONSE:
             {transcript}
 
+            CONTEXT ON USER'S CONVERSATION SO FAR:
+            {rolling_summary}
+
             SCORE RANGE:
             {score_range}
 
             
-            Return JSON: {{"is_question_answered": boolean, "score": int or null, "reason": "missing_metric" | "off_topic" | "complete"}}
+            Return JSON: {{"is_question_answered": boolean, "score": int or null}}
         """
         
         # TODO: determine right temperature for 3b + remove max_tokens?
@@ -291,10 +339,6 @@ def get_current_question_score(transcript, current_question, score_range):
                 if not parsed.get("is_question_answered"):
                     print("[WARNING] Missing is_question_answered field")
                     parsed["is_question_answered"] = False
-                
-                if not parsed.get("reasoning"):
-                    print("[WARNING] Missing reasoning field")
-                    parsed["reasoning"] = ""
 
                 return parsed
                 
@@ -317,8 +361,7 @@ def get_current_question_score(transcript, current_question, score_range):
         print("[WARNING] Using fallback response")
         return {
             "score": 0,
-            "is_question_answered": False,
-            "reasoning": ""
+            "is_question_answered": False
         }
         
     except Exception as e:
@@ -326,6 +369,5 @@ def get_current_question_score(transcript, current_question, score_range):
         
         return {
             "score": 0,
-            "is_question_answered": False,
-            "reasoning": ""
+            "is_question_answered": False
         }

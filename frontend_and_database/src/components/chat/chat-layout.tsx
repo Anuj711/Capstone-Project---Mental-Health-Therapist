@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase, useDoc, useCollection } from '@/firebase';
 import { collection, query, orderBy, doc } from 'firebase/firestore';
-import { uploadFileToFirebase, sendFileUrlToPythonAPI } from '@/lib/client-actions';
+import { uploadFileToFirebase, sendFileUrlToPythonAPI, sendStatusUpdates } from '@/lib/client-actions';
 import { postChatMessage, enablePCL5Assessment } from '@/lib/actions';
 import { useVideoRecording } from '@/hooks/useVideoRecording';
 import { RecordingOverlay } from './RecordingOverlay';
@@ -77,6 +77,11 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         throw new Error(uploadResult.message || 'File upload failed.');
       }
 
+      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const lastBotReply = assistantMessages.length > 0 
+        ? assistantMessages[assistantMessages.length - 1].text 
+        : null;
+
       // Send current state to backend
       const currentAnswers = sessionData?.user_answers || [];
       const currentSummary = sessionData?.rolling_summary || "";
@@ -88,6 +93,7 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         uploadResult.url,
         currentAnswers,
         currentSummary,
+        lastBotReply,
         currentScores,
         sessionStatus
       );
@@ -106,6 +112,10 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
 
       await postChatMessage(user!.uid, sessionId, aiResponse);
       
+      await sendStatusUpdates(
+        sessionId,
+        `${user!.uid}`,
+        aiResponse.session_status)
     } catch (error: any) {
       console.error('Error sending video:', error);
       toast({

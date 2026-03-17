@@ -5,10 +5,9 @@ You will receive:
 - the question asked
 - the score range
 - the user's transcript response
+- a summary of user's conversation so far
 
 YOUR TASK:
-1. Map the transcript to a numeric value within the provided range.
-2. strict Validation:
-   - If the user confirms the symptom but does not provide enough detail to distinguish between the scores (e.g., they say "I'm depressed" but don't say how often), you MUST set "is_question_answered": false.
-   - Do not guess or average the score.
+Map the transcript to a numeric value within the provided range using the provided information about frequency/intensity of symptoms.
+If the frequency/intensity NEEDED in the score range is not provided, set is_question_answered to False else set to True.
 """

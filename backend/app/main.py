@@ -10,7 +10,7 @@ from app.utils.questionnaire_handler import \
     get_question_data, \
     get_questionnaire_score_range, append_question_to_unanswered_list, \
     mark_question_answered, get_overlapping_updates, \
-    QUESTION_TRACKER
+    QUESTION_TRACKER, update_question_tracker
 from app.services.openai_client import update_rolling_info_and_get_reply, get_current_question_score
 from flask_cors import CORS
 
@@ -84,6 +84,7 @@ def analyze_turn():
     user_answers = data.get("user_answers") or []
     existing_scores = data.get("diagnostic_scores") or {}
     session_status = data.get("session_status", "active")
+    last_bot_reply = data.get("last_bot_reply", None)
 
     if not video_file:
         return jsonify({"error": "Missing video url"}), 400
@@ -96,9 +97,22 @@ def analyze_turn():
     if not transcript:
         return jsonify({"error": "Missing transcript"}), 400
 
-    # Step 1: Trigger word check
-    found_trigger, word = check_trigger_words(transcript)
-    if found_trigger:
+    # Step 2: Get current and next questions
+    current_qid = QUESTION_TRACKER.get("current_qs_id")
+    current_question_text = get_question_data(current_qid)
+    next_question_text = get_question_data(QUESTION_TRACKER["next_qs_id"])
+
+    # Step 3a: Update rolling summary and user answers
+    model_output = update_rolling_info_and_get_reply(
+        assembly_data, deepface_data, rolling_summary,
+        user_answers, current_qid, get_questionnaire_score_range(current_qid),
+        current_question_text, next_question_text, 
+        previous_bot_reply=last_bot_reply,
+        session_status=session_status)
+    
+    is_emergency = model_output.get("is_emergency") or False
+    trigger_word = model_output.get("trigger_word") or ""
+    if is_emergency:
         emergency_response = {
             "text": "It sounds like you might be in distress. Please reach out to immediate help:\n\nNational Suicide Prevention Lifeline: 988 (US)\nCrisis Text Line: Text HOME to 741741\n\nYou're not alone.",
             "diagnostic_scores": {},
@@ -114,28 +128,17 @@ def analyze_turn():
             "deepface_output": deepface_data,
             "diagnostic_match": False,
             "emergency": True,
-            "triggered_word": word,
+            "triggered_word": trigger_word,
             "trauma_detected": False,
             "session_status": "ended-complete",
             "sufficientDataCollected": True
         }
         return jsonify(emergency_response), 200
 
-    # Step 2: Get current and next questions
-    current_qid = QUESTION_TRACKER.get("current_qs_id")
-    current_question_text = get_question_data(current_qid)
-    next_question_text = get_question_data(QUESTION_TRACKER["next_qs_id"])
-
-    # Step 3a: Update rolling summary and user answers
-    model_output = update_rolling_info_and_get_reply(
-        assembly_data, deepface_data, rolling_summary,
-        user_answers, QUESTION_TRACKER["current_qs_id"],
-        current_question_text, next_question_text, session_status)
-
     updated_summary = model_output.get("updated_summary") or ""
     updated_answers = model_output.get("updated_user_answers") or []
     
-    rolling_summary += updated_summary
+    rolling_summary = updated_summary
     user_answers.extend(updated_answers)
     bot_reply = model_output.get("bot_reply", "")
 
@@ -148,9 +151,10 @@ def analyze_turn():
     is_answered = False
     current_score = 0
     score_output = {}
-    if not needs_followup:
+    if not needs_followup and not is_contradictory:
         score_output = get_current_question_score(
             transcript, 
+            updated_summary,
             current_question_text, 
             get_questionnaire_score_range(current_qid)
         )
@@ -161,8 +165,9 @@ def analyze_turn():
 
     # Step 4: update scores
     score_updates_for_firestore = {}
-    # RULE 1: Progress only if answered, not contradictory, and no follow-up needed
-    if is_answered and not is_contradictory and current_qid not in contradicting_ids:
+    
+    # RULE 1: Progress only if answered, NO follow-up needed, AND NO contradictions detected.
+    if is_answered and not needs_followup and not is_contradictory:
         mark_question_answered(current_qid)
         score_updates_for_firestore[current_qid] = current_score
     
@@ -170,28 +175,23 @@ def analyze_turn():
         overlaps = get_overlapping_updates(current_qid, current_score)
         if isinstance(overlaps, dict):
             score_updates_for_firestore.update(overlaps)
-        print("Reaches updating curretn and next question ids:\n")
-        print("Before updating - current qs index:", QUESTION_TRACKER["current_qs_index"])
-        print("Before updating - next qs index:", QUESTION_TRACKER["next_qs_index"])
-        print("Before updating - current qs id:", QUESTION_TRACKER["current_qs_id"])
-        print("Before updating - next qs id:", QUESTION_TRACKER["next_qs_id"])
-
+        
         # Step 6: update current and next question ids
-        QUESTION_TRACKER["current_qs_index"] += 1
-        QUESTION_TRACKER["next_qs_index"] += 1
-        print("After updating - current qs index:", QUESTION_TRACKER["current_qs_index"])
-        print("After updating - next qs index:", QUESTION_TRACKER["next_qs_index"])
-        print("After updating - current qs id:", QUESTION_TRACKER["current_qs_id"])
-        print("After updating - next qs id:", QUESTION_TRACKER["next_qs_id"])
+        update_question_tracker()
+        print(f"[DEBUG] Question {current_qid} marked as answered. Moving to next.")
     else:
-        # RULE 2: If unanswered, contradictory, or needs follow-up, re-add to unanswered list
-        append_question_to_unanswered_list(current_qid)
-        print(f"[DEBUG] STAYING ON QUESTION {current_qid} FOR FOLLOW-UP")
+        # RULE 2: If unanswered, contradictory, or needs follow-up, stay on current question.
+        print(f"[DEBUG] STAYING ON QUESTION {current_qid} FOR FOLLOW-UP/CONTRADICTION")
 
-    # RULE 3: Handle past contradictions
+    # RULE 3: Handle contradictory question IDs
     for q_id in contradicting_ids:
+        # If it's the current question, we've already handled staying on it via RULE 2.
+        # If it's a DIFFERENT question that was contradicted, move it to the unanswered queue.
         if q_id != current_qid:
             append_question_to_unanswered_list(q_id)
+            print(f"[DEBUG] Question {q_id} was contradicted. Moving back to unanswered queue.")
+            
+            # Reset existing score in Firestore for the contradicted question
             prev_val = existing_scores.get(q_id, 0)
             if prev_val != 0:
                 score_updates_for_firestore[q_id] = -prev_val
@@ -270,7 +270,6 @@ def analyze_turn():
     print("[DEBUG] RETURNING FINAL PAYLOAD:")
     print(response_payload)
     print("."*80 + "\n")
-
 
     return jsonify(response_payload), 200
 

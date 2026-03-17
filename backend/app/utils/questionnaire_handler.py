@@ -46,6 +46,9 @@ def get_question_data(qid):
     Returns: The specific question text and response options
     """
     # Split questionnaire name from the question number
+    if not qid:
+        return ""
+
     scale_name, q_part = qid.split('_')
     q_index = int(q_part.replace('Q', '')) # Get qs number
 
@@ -60,7 +63,9 @@ def append_question_to_unanswered_list(qid):
     UNANSWERED_QUESTION_IDS.append(qid)
 
 def mark_question_answered(qid):
+    print(f"len before removing qid={qid} = {len(UNANSWERED_QUESTION_IDS)}")
     UNANSWERED_QUESTION_IDS.remove(qid)
+    print(f"len after removing qid={qid} = {len(UNANSWERED_QUESTION_IDS)}")
 
 def map_score(source_score, source_max, target_max):
     """Maps a score from one range to another proportionally."""
@@ -96,6 +101,7 @@ def get_overlapping_updates(current_qid, current_score):
                     # Map the score proportionally
                     new_score = map_score(current_score, source_max, target_max)
                     updates.append({target_qid: new_score})
+                    mark_question_answered(target_qid)
                     
     return updates
 
