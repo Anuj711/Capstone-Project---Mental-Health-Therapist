@@ -80,26 +80,53 @@ export async function sendFileUrlToPythonAPI(
   session_id: string, 
   user_id: string, 
   video_url: string, 
-  user_answers: Array<{q_id: string; user_answer: string}>, 
+  user_answers: any[], 
   rolling_summary: string,
-  last_bot_reply: string,
-  diagnostic_scores: Record<string, number>,
-  session_status: string="active"
+  last_bot_reply: string | null,
+  diagnostic_scores: any,
+  session_status: string,
+  question_tracker: any,
+  unanswered_question_ids: string[]
 ) {
   try {
+    if (!question_tracker || !unanswered_question_ids) {
+      console.error("CRITICAL: Tracker missing in API call");
+    }
+
+    console.log("Tracker being sent:", question_tracker);
+    console.log("Unanswered qs being sent:", unanswered_question_ids);
+
     const payload = {
-      session_id, user_id, video_url, user_answers, 
-      rolling_summary, last_bot_reply, diagnostic_scores, session_status
+      video_url, // Backend expects "video_url"
+      user_answers,
+      rolling_summary,
+      last_bot_reply,
+      diagnostic_scores,
+      session_status,
+      question_tracker,
+      unanswered_question_ids
     };
-    
+
+    console.log("DEBUG: Sending Payload to Python:", payload);
+
     const response = await fetch("http://localhost:8000/analyze_turn", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok) throw new Error(`Backend error: ${await response.text()}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      // If the backend specifically mentions the transcript,
+      // throw a custom error so bot reply is tailored to this error
+      if (errorText.includes("Missing transcript")) {
+        throw new Error("MISSING_TRANSCRIPT");
+      }
+      throw new Error(`Backend error: ${errorText}`);
+    }
     
+    if (!response.ok) throw new Error(`Backend error: ${await response.text()}`);
+      
     const data = await response.json();
     console.log('✅ Backend response:', data);
     const sessionRef = doc(db, `users/${user_id}/sessions/${session_id}`);
@@ -108,10 +135,11 @@ export async function sendFileUrlToPythonAPI(
       rolling_summary: data.rolling_summary,
       user_answers: data.user_answers,
       sufficientDataCollected: data.sufficientDataCollected,
+      question_tracker: data.question_tracker,
+      unanswered_question_ids: data.unanswered_question_ids,
       updatedAt: serverTimestamp(),
     };
 
-    // TODO: update diagnostic_scores and fix completion percentage
     if (data.diagnostic_scores) {
       Object.entries(data.diagnostic_scores).forEach(([qId, score]) => {
         updates[`diagnostic_scores.${qId}`] = increment(score as number);

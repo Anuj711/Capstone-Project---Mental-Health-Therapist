@@ -107,6 +107,8 @@ def update_rolling_info_and_get_reply(
                 "updated_user_answers": [
                     {{
                         "question_id": "...",
+                        "question": "...",
+                        "evidence": "...",
                         "answer": "...",
                         "contradictory": false
                     }}

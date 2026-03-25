@@ -28,16 +28,29 @@ export async function createNewSession(
 ): Promise<{ success: boolean; sessionId?: string; message?: string }> {
   try {
     const adminDb = getAdminApp().firestore();
+
+    // Initial list for tracking
+    const initialQuestions = [
+      "PHQ-9_Q1", "PHQ-9_Q2", "PHQ-9_Q3", "PHQ-9_Q4", "PHQ-9_Q5", "PHQ-9_Q6", "PHQ-9_Q7", "PHQ-9_Q8", "PHQ-9_Q9",
+      "GAD-7_Q1", "GAD-7_Q2", "GAD-7_Q3", "GAD-7_Q4", "GAD-7_Q5", "GAD-7_Q6", "GAD-7_Q7"
+    ];
     
     const sessionRef = await adminDb.collection(`users/${userId}/sessions`).add({
       name: sessionName || `Session ${new Date().toLocaleDateString()}`,
       status: 'active',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       completionPercentage: 0,
-      totalQuestions: 16, // Start with PHQ-9 (9) + GAD-7 (7)
+      totalQuestions: 16,
       answeredQuestions: 0,
       sufficientDataCollected: false,
       traumaDetected: false,
+      unanswered_question_ids: initialQuestions,
+      question_tracker: {
+        current_qs_id: "PHQ-9_Q1",
+        next_qs_id: "PHQ-9_Q2",
+        current_qs_index: 0
+      },
+      diagnostic_scores: {}
     });
 
     const questionsCollection = sessionRef.collection('questions');
@@ -222,139 +235,72 @@ function generateClinicalInsight(assessments: any[]) {
 export async function updateQuestionScores(
   userId: string,
   sessionId: string,
-  mapping: DiagnosticMapping
+  flatMapping: Record<string, number>
 ) {
   const adminDb = getAdminApp().firestore();
-  const questionsCollection = adminDb
-    .doc(`users/${userId}/sessions/${sessionId}`)
-    .collection('questions');
+  const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
+  const questionsCollection = sessionRef.collection('questions');
 
   console.log('\n' + '='.repeat(80));
   console.log('🔄 UPDATE QUESTION SCORES');
-  
-  // Update question scores AND mark as answered
-  for (const [assessmentName, questionMap] of Object.entries(mapping)) {
-    const updates: Record<string, any> = {};
-    
-    for (const [questionId, { score }] of Object.entries(questionMap)) {
-      // Validate score is within valid range
-      const maxScore = assessmentName === 'PCL-5' ? 4 : 3;
-      const isValidScore = score !== null && score !== undefined && score >= 0 && score <= maxScore;
-      
-      if (isValidScore) {
-        updates[`questions.${questionId}.score`] = score;
-        updates[`questions.${questionId}.answered`] = true; // Mark as answered
-        console.log(`  ✅ ${questionId}: score=${score}, answered=true`);
-      } else {
-        console.log(`  ⚠️ ${questionId}: invalid score=${score}`);
-      }
-    }
 
-    if (Object.keys(updates).length > 0) {
-      await questionsCollection.doc(assessmentName).update({
-        ...updates,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+  const groupedUpdates: Record<string, Record<string, any>> = {};
+
+  for (const [flatId, score] of Object.entries(flatMapping)) {
+    // 1. Split "PHQ-9_Q1" into assessment ("PHQ-9") and question ("Q1")
+    const parts = flatId.split('_');
+    if (parts.length < 2) continue;
+
+    const assessmentName = parts[0]; // e.g., "PHQ-9"
+    const qPart = parts[1];          // e.g., "Q1"
+
+    // 2. Format to match your DB keys: "Q1_PHQ9"
+    const assessmentNoHyphen = assessmentName.replace(/-/g, '');
+    const internalFieldId = `${qPart}_${assessmentNoHyphen}`;
+
+    if (!groupedUpdates[assessmentName]) groupedUpdates[assessmentName] = {};
+
+    // 3. Target the 'questions' map specifically
+    groupedUpdates[assessmentName][`questions.${internalFieldId}.score`] = score;
+    groupedUpdates[assessmentName][`questions.${internalFieldId}.answered`] = true;
+  }
+
+  // 4. Execute the updates on the existing documents
+  for (const [assessmentName, updates] of Object.entries(groupedUpdates)) {
+    try {
+      await questionsCollection.doc(assessmentName).update(updates);
+      console.log(` ✅ Successfully updated existing ${assessmentName} scores.`);
+    } catch (error) {
+      await questionsCollection.doc(assessmentName).set(updates, { merge: true });
+      console.log(` ⚠️ Created/Merged ${assessmentName} scores.`);
     }
   }
 
-  // Check if ALL questions are answered
+  // 5. Calculate Progress 
   const snapshot = await questionsCollection.get();
-  
   let totalQuestions = 0;
   let answeredQuestions = 0;
-  let allAnswered = true;
-  
-  console.log('\n📋 Checking completion status:');
-  
+
   snapshot.forEach(doc => {
-    const docData = doc.data();
-    const questions = docData.questions || {};
-    const assessmentName = doc.id;
-    
-    let assessmentTotal = 0;
-    let assessmentAnswered = 0;
-    
-    for (const [questionId, data] of Object.entries(questions)) {
-      if (data && typeof data === 'object') {
-        const questionData = data as { score: number | null; answered: boolean };
-        totalQuestions++;
-        assessmentTotal++;
-        
-        if (questionData.answered === true) {
-          answeredQuestions++;
-          assessmentAnswered++;
-        } else {
-          allAnswered = false;
-        }
+    const questions = doc.data().questions || {};
+    for (const [_, data] of Object.entries(questions)) {
+      totalQuestions++;
+      if ((data as any).score !== null || (data as any).answered === true) {
+        answeredQuestions++;
       }
     }
-    
-    console.log(`  ${assessmentName}: ${assessmentAnswered}/${assessmentTotal} answered`);
   });
-  
+
   const percentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
   
-  console.log(`\n📊 Overall Progress: ${answeredQuestions}/${totalQuestions} = ${percentage}%`);
-  console.log(`✅ All questions answered: ${allAnswered ? 'YES' : 'NO'}`);
-  
-  // Update session progress
-  await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
+  await sessionRef.update({
     completionPercentage: percentage,
-    totalQuestions: totalQuestions,
-    answeredQuestions: answeredQuestions,
-    sufficientDataCollected: allAnswered,
+    answeredQuestions,
+    totalQuestions
   });
-  
-  // Get session status
-  const sessionDoc = await adminDb.doc(`users/${userId}/sessions/${sessionId}`).get();
-  const sessionData = sessionDoc.data();
-  const sessionStatus = sessionData?.status;
-  
-  // If ALL questions answered AND session is active → generate summary
-  if (allAnswered && sessionStatus === 'active') {
-    console.log('🎉 ALL QUESTIONS ANSWERED - Generating summary and ending session');
-    
-    // Calculate assessments for summary
-    const fullMapping: DiagnosticMapping = {};
-    
-    snapshot.forEach(doc => {
-      const docData = doc.data();
-      fullMapping[doc.id] = docData.questions || {};
-    });
-    
-    const assessments = calculateAssessments(fullMapping);
-    const clinicalInsight = generateClinicalInsight(assessments);
-    
-    const detailedSymptoms = assessments.map((a) => ({
-      disorder: a.name,
-      likelihood: a.percentage,
-      symptomsReported: [
-        `${a.score} out of ${a.maxScore} total points reported`,
-        `Severity level: ${a.severity}`,
-      ],
-    }));
 
-    await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
-      status: 'ended-complete',
-      endedAt: admin.firestore.FieldValue.serverTimestamp(),
-      summaryData: {
-        assessments,
-        clinicalInsight,
-        detailedSymptoms,
-      }
-    });
-    
-    console.log('✅ Summary generated and session completed');
-  } else if (allAnswered && sessionStatus === 'resumed') {
-    console.log('ℹ️ All questions answered but session is in free-talk mode');
-  } else {
-    console.log(`⏳ Continue conversation - ${totalQuestions - answeredQuestions} questions remaining`);
-  }
-  
-  console.log('='.repeat(80) + '\n');
+  console.log(`📊 Progress Updated: ${answeredQuestions}/${totalQuestions} (${percentage}%)`);
 }
-
 
 // --------------------
 // Journal entry schema

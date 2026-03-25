@@ -9,8 +9,6 @@ UNANSWERED_QUESTION_IDS = (
     [f'PCL-5_Q{i}' for i in range(1, 21)]
 )
 
-#TODO: Pass both QUESTION_TRACKER struct and UNANSWERED_QUESTION_IDS struct to firestore and retrieve from firestore, to know what question we are on. This will
-#ensure we don't overwrite other users' answers due to these structs being global variable 
 QUESTION_TRACKER = {
     "current_qs_index": 0,
     "next_qs_index": 1,
@@ -35,6 +33,7 @@ def get_questionnaire_score_range(qid):
         { "label": "More than half the days", "value": 2 },
         { "label": "Nearly every day", "value": 3 }
     """
+    if not qid: return []
     scale_name, q_part = qid.split('_')
     scale = QUESTIONNAIRES.get(scale_name)
     score_range = scale["response_options"]
@@ -59,13 +58,14 @@ def get_question_data(qid):
 
     return f"{scale['time_window']}: {question['text']}"
 
-def append_question_to_unanswered_list(qid):
-    UNANSWERED_QUESTION_IDS.append(qid)
+def append_question_to_unanswered_list(qid, unanswered_list):
+    unanswered_list.append(qid)
+    return unanswered_list
 
-def mark_question_answered(qid):
-    print(f"len before removing qid={qid} = {len(UNANSWERED_QUESTION_IDS)}")
-    UNANSWERED_QUESTION_IDS.remove(qid)
-    print(f"len after removing qid={qid} = {len(UNANSWERED_QUESTION_IDS)}")
+def mark_question_answered(qid, unanswered_list):
+    if qid in unanswered_list:
+        unanswered_list.remove(qid)
+    return unanswered_list
 
 def map_score(source_score, source_max, target_max):
     """Maps a score from one range to another proportionally."""
@@ -73,13 +73,13 @@ def map_score(source_score, source_max, target_max):
         return None
     return round(source_score * (target_max / source_max))
 
-def get_overlapping_updates(current_qid, current_score):
+def get_overlapping_updates(current_qid, current_score, unanswered_list):
     """ Example
     Input: 'PHQ-9_Q1', 3
     Returns: [{'PCL-5_Q12': 4}]
     """
     scale_name, q_num = current_qid.split('_')
-    updates = []
+    updates = {}
 
     # Filter for the row where this specific question exists 
     mask = (SYMPTOM_OVERLAP_DF[scale_name] == q_num) & (SYMPTOM_OVERLAP_DF['Overlap Type'] == 'FULL')
@@ -100,24 +100,22 @@ def get_overlapping_updates(current_qid, current_score):
                     
                     # Map the score proportionally
                     new_score = map_score(current_score, source_max, target_max)
-                    updates.append({target_qid: new_score})
-                    mark_question_answered(target_qid)
+                    updates[target_qid] = new_score
+                    unanswered_list = mark_question_answered(target_qid, unanswered_list)
                     
-    return updates
+    return updates, unanswered_list
 
-def update_question_tracker():
+def update_question_tracker(unanswered_list):
     """
     Refreshes the QUESTION_TRACKER based on the current 
     state of UNANSWERED_QUESTION_IDS.
     """
-    global QUESTION_TRACKER
-    
     # Check if there are any questions left
-    count = len(UNANSWERED_QUESTION_IDS)
+    count = len(unanswered_list)
     
     if count == 0:
         # Handle the end of the questionnaire
-        QUESTION_TRACKER = {
+        new_tracker = {
             "current_qs_index": None,
             "next_qs_index": None,
             "current_qs_id": None,
@@ -127,16 +125,18 @@ def update_question_tracker():
     else:
         # Always grab the first item for "current" 
         # because the previous current was removed
-        QUESTION_TRACKER["current_qs_index"] = 0
-        QUESTION_TRACKER["current_qs_id"] = UNANSWERED_QUESTION_IDS[0]
+        new_tracker = {
+            "current_qs_index": 0,
+            "current_qs_id": unanswered_list[0]
+        }
         
         # Check if there is a next question available
         if count > 1:
-            QUESTION_TRACKER["next_qs_index"] = 1
-            QUESTION_TRACKER["next_qs_id"] = UNANSWERED_QUESTION_IDS[1]
+            new_tracker["next_qs_index"] = 1
+            new_tracker["next_qs_id"] = unanswered_list[1]
         else:
             # This is the last question
-            QUESTION_TRACKER["next_qs_index"] = None
-            QUESTION_TRACKER["next_qs_id"] = None
+            new_tracker["next_qs_index"] = None
+            new_tracker["next_qs_id"] = None
             
-    return QUESTION_TRACKER
+    return new_tracker

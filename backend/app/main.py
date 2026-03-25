@@ -10,7 +10,7 @@ from app.utils.questionnaire_handler import \
     get_question_data, \
     get_questionnaire_score_range, append_question_to_unanswered_list, \
     mark_question_answered, get_overlapping_updates, \
-    QUESTION_TRACKER, update_question_tracker
+    update_question_tracker
 from app.services.openai_client import update_rolling_info_and_get_reply, get_current_question_score
 from flask_cors import CORS
 
@@ -72,10 +72,6 @@ def analyze_turn():
         }
     """
 
-    print("\n" + "="*80)
-    print(f"[DEBUG] PROCESSING CURRENT QS ID: {QUESTION_TRACKER['current_qs_id']}")
-    print("="*80 + "\n")
-    
     # TODO: check if QUESTION_TRACKER["current_qs_index"] is none then handle questionnaire over scenario
     # TODO: (nice to have) add a JSON Scehma to make sure we always return the above formatted JSON payload
     data = request.get_json()
@@ -85,6 +81,14 @@ def analyze_turn():
     existing_scores = data.get("diagnostic_scores") or {}
     session_status = data.get("session_status", "active")
     last_bot_reply = data.get("last_bot_reply", None)
+
+    # Retrieval of session-specific state from payload
+    incoming_tracker = data.get("question_tracker") or {}
+    incoming_unanswered = data.get("unanswered_question_ids") or []
+
+    print("\n" + "="*80)
+    print(f"[DEBUG] PROCESSING CURRENT QS ID: {incoming_tracker.get('current_qs_id')}")
+    print("="*80 + "\n")
 
     if not video_file:
         return jsonify({"error": "Missing video url"}), 400
@@ -98,9 +102,9 @@ def analyze_turn():
         return jsonify({"error": "Missing transcript"}), 400
 
     # Step 2: Get current and next questions
-    current_qid = QUESTION_TRACKER.get("current_qs_id")
+    current_qid = incoming_tracker.get("current_qs_id")
     current_question_text = get_question_data(current_qid)
-    next_question_text = get_question_data(QUESTION_TRACKER["next_qs_id"])
+    next_question_text = get_question_data(incoming_tracker.get("next_qs_id"))
 
     # Step 3a: Update rolling summary and user answers
     model_output = update_rolling_info_and_get_reply(
@@ -161,23 +165,23 @@ def analyze_turn():
         is_answered = score_output.get("is_question_answered", False)
         current_score = score_output.get("score", 0)
     else:
-        print(f"[DEBUG] Skipping scoring because needs_followup is TRUE")
+        print(f"[DEBUG] Skipping scoring because needs_followup or contradiction is TRUE")
 
     # Step 4: update scores
     score_updates_for_firestore = {}
-    
+    current_unanswered = list(incoming_unanswered)
+    current_tracker = dict(incoming_tracker)
+
     # RULE 1: Progress only if answered, NO follow-up needed, AND NO contradictions detected.
     if is_answered and not needs_followup and not is_contradictory:
-        mark_question_answered(current_qid)
+        current_unanswered = mark_question_answered(current_qid, current_unanswered)
         score_updates_for_firestore[current_qid] = current_score
     
         # Handle overlaps
-        overlaps = get_overlapping_updates(current_qid, current_score)
+        overlaps, current_unanswered = get_overlapping_updates(current_qid, current_score, current_unanswered)
         if isinstance(overlaps, dict):
-            score_updates_for_firestore.update(overlaps)
-        
-        # Step 6: update current and next question ids
-        update_question_tracker()
+            score_updates_for_firestore.update(overlaps)       
+        current_tracker = update_question_tracker(current_unanswered)
         print(f"[DEBUG] Question {current_qid} marked as answered. Moving to next.")
     else:
         # RULE 2: If unanswered, contradictory, or needs follow-up, stay on current question.
@@ -188,7 +192,7 @@ def analyze_turn():
         # If it's the current question, we've already handled staying on it via RULE 2.
         # If it's a DIFFERENT question that was contradicted, move it to the unanswered queue.
         if q_id != current_qid:
-            append_question_to_unanswered_list(q_id)
+            current_unanswered = append_question_to_unanswered_list(q_id, current_unanswered)
             print(f"[DEBUG] Question {q_id} was contradicted. Moving back to unanswered queue.")
             
             # Reset existing score in Firestore for the contradicted question
@@ -197,7 +201,8 @@ def analyze_turn():
                 score_updates_for_firestore[q_id] = -prev_val
 
     # Final Check: Are we out of questions?
-    if not current_qid and session_status != "resumed":
+    current_qid = current_tracker.get("current_qs_id")
+    if not current_qid and session_status != "resumed" and len(incoming_unanswered) == 0:
         final_session_status = "ended-complete"
         sufficient_data = True
         bot_reply = "We've covered all the specific areas I wanted to check on today. Thank you for being so open with me. You can now view your session summary."
@@ -264,6 +269,8 @@ def analyze_turn():
         "trauma_detected": trauma_detected,
         "session_status": final_session_status,
         "sufficientDataCollected": sufficient_data,
+        "question_tracker": current_tracker,
+        "unanswered_question_ids": current_unanswered
     }
 
     print("\n" + "."*80)

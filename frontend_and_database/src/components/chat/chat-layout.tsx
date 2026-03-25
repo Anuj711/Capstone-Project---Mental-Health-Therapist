@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, useMemoFirebase, useDoc, useCollection } from '@/firebase';
 import { collection, query, orderBy, doc } from 'firebase/firestore';
 import { uploadFileToFirebase, sendFileUrlToPythonAPI, sendStatusUpdates } from '@/lib/client-actions';
-import { postChatMessage, enablePCL5Assessment } from '@/lib/actions';
+import { postChatMessage, enablePCL5Assessment, updateQuestionScores } from '@/lib/actions';
 import { useVideoRecording } from '@/hooks/useVideoRecording';
 import { RecordingOverlay } from './RecordingOverlay';
 import { MessageBubble } from './MessageBubble';
@@ -52,7 +52,18 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
   useEffect(() => {
     if (initialMessages) {
       if (initialMessages.length > 0) {
-        setMessages(initialMessages);
+        const hasWelcome = initialMessages.some(m => m.id === 'welcome');
+        if (!hasWelcome && initialMessages.length > 0) {
+             const welcomeMsg: ChatMessage = {
+                id: 'welcome',
+                role: 'assistant',
+                text: "Welcome. I’m here to listen and support you...",
+                timestamp: new Date(initialMessages[0].timestamp.toDate().getTime() - 1000),
+              };
+              setMessages([welcomeMsg, ...initialMessages]);
+        } else {
+            setMessages(initialMessages);
+        }
       } else {
         const firstGreeting: ChatMessage = {
           id: 'welcome',
@@ -67,6 +78,21 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
 
   const handleRecordingStop = async (blob: Blob) => {
     if (!blob) return;
+
+    if (!sessionData?.question_tracker || !sessionData?.unanswered_question_ids) {
+      toast({
+        title: "Initializing Session...",
+        description: "Please wait a second for the session to sync and try again.",
+      });
+      return;
+   }
+
+    console.log("🔍 [STATE CHECK]");
+    console.log("Current sessionStatus:", sessionStatus);
+    console.log("Current Tracker ID:", sessionData?.question_tracker?.current_qs_id);
+    console.log("Unanswered Count:", sessionData?.unanswered_question_ids?.length);
+    console.log("Rolling Summary Length:", sessionData?.rolling_summary?.length);
+  
     setIsSending(true);
 
     try {
@@ -82,10 +108,17 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         ? assistantMessages[assistantMessages.length - 1].text 
         : null;
 
-      // Send current state to backend
+      // Send current state AND trackers to backend
       const currentAnswers = sessionData?.user_answers || [];
       const currentSummary = sessionData?.rolling_summary || "";
       const currentScores = sessionData?.diagnostic_scores || {};
+      const tracker = sessionData?.question_tracker;
+      const unanswered = sessionData?.unanswered_question_ids;
+
+      console.log("🚀 [SENDING TO BACKEND]", {
+        tracker: sessionData?.question_tracker,
+        unanswered: sessionData?.unanswered_question_ids
+      });
 
       const aiResponse = await sendFileUrlToPythonAPI(
         sessionId,
@@ -95,8 +128,15 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         currentSummary,
         lastBotReply,
         currentScores,
-        sessionStatus
+        sessionStatus,
+        tracker,
+        unanswered
       );
+
+      console.log("📥 [RECEIVED FROM BACKEND]", {
+        next_qs: aiResponse.question_tracker?.current_qs_id,
+        new_status: aiResponse.session_status
+      });
 
       if (aiResponse.trauma_detected) {
         console.log('Trauma detected - enabling PCL-5 assessment');
@@ -110,6 +150,11 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
           }
         }
 
+      // Update the question collection and global scores
+      if (aiResponse.diagnostic_scores) {
+        await updateQuestionScores(user!.uid, sessionId, aiResponse.diagnostic_scores);
+      }
+
       await postChatMessage(user!.uid, sessionId, aiResponse);
       
       await sendStatusUpdates(
@@ -117,12 +162,33 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         `${user!.uid}`,
         aiResponse.session_status)
     } catch (error: any) {
-      console.error('Error sending video:', error);
-      toast({
-        title: 'Action Failed',
-        description: error.message || 'Could not upload or send your message.',
-        variant: 'destructive',
-      });
+      if (error.message === "MISSING_TRANSCRIPT") {
+        // Create a friendly local bot message
+        const errorBotMsg: ChatMessage = {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          text: "I'm sorry, I couldn't quite catch that. Could you please try re-recording? Please make sure your microphone is on and you're speaking clearly.",
+          timestamp: new Date(),
+        };
+  
+        // Add it to the UI locally so the user sees it immediately
+        setMessages(prev => [...prev, errorBotMsg]);
+        
+        toast({
+          title: "Audio Not Detected",
+          description: "Please check your microphone settings.",
+          variant: "default",
+        });
+      }
+      else
+      {
+        console.error('Error sending video:', error);
+        toast({
+          title: 'Action Failed',
+          description: error.message || 'Could not upload or send your message.',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsSending(false);
       resetRecording();
