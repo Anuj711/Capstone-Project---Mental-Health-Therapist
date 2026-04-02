@@ -39,6 +39,21 @@ def get_questionnaire_score_range(qid):
     score_range = scale["response_options"]
     return score_range
 
+def deduplicate_user_answers(existing_list, incoming_list):
+    """
+    Combines existing answers with new ones. 
+    New answers for an existing ID will overwrite the old ones.
+    Brand new IDs will be appended to the collection.
+    """
+    unified = {a['question_id']: a for a in existing_list}
+    
+    # Update the map with everything the model just sent
+    for new_answer in incoming_list:
+        # If ID exists, this overwrites. If not, it adds a new key-value pair.
+        unified[new_answer['question_id']] = new_answer
+
+    return list(unified.values())
+
 def get_question_data(qid):
     """ Example
     Input: 'PHQ-9_Q3'
@@ -59,7 +74,8 @@ def get_question_data(qid):
     return f"{scale['time_window']}: {question['text']}"
 
 def append_question_to_unanswered_list(qid, unanswered_list):
-    unanswered_list.append(qid)
+    if qid not in unanswered_list:
+        unanswered_list.append(qid)
     return unanswered_list
 
 def mark_question_answered(qid, unanswered_list):

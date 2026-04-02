@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { JournalEntry, Mood, ChatMessage } from './definitions';
 import admin, { firestore } from 'firebase-admin';
+import pcl5Data from '@/data/pcl5.json';
 
 
 // Helper to get the initialized Firebase Admin App
@@ -91,47 +92,77 @@ export async function enablePCL5Assessment(
 ): Promise<{ success: boolean; message?: string }> {
   try {
     const adminDb = getAdminApp().firestore();
+    const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
+    const questionsCollection = sessionRef.collection('questions');
     
-    const pcl5Doc = await adminDb
-      .doc(`users/${userId}/sessions/${sessionId}`)
-      .collection('questions')
-      .doc('PCL-5')
-      .get();
+    // Check if already enabled to prevent duplicate injections
+    const sessionSnap = await sessionRef.get();
+    const sessionData = sessionSnap.data();
     
-    if (pcl5Doc.exists) {
-      console.log('PCL-5 already exists');
+    if (sessionData?.traumaDetected) {
+      console.log('⏭️ PCL-5 already enabled for this session.');
       return { success: true };
     }
-    
-    console.log('🆕 Creating PCL-5 assessment (trauma detected)');
-    
-    const questionsCollection = adminDb
-      .doc(`users/${userId}/sessions/${sessionId}`)
-      .collection('questions');
-    
-    // Create PCL-5 questions with answered status
-    const pcl5Questions: Record<string, { score: number | null; answered: boolean }> = {};
-    for (let i = 1; i <= 20; i++) {
-      pcl5Questions[`Q${i}_PCL5`] = { score: null, answered: false };
-    }
-    
-    await questionsCollection.doc('PCL-5').set({
+
+    console.log('🆕 Enabling PCL-5 assessment (Trauma Detected)');
+
+    // Get any scores previously stored PCL scores in diagnostic_scores
+    const existingScores = sessionData?.diagnostic_scores || {};
+  
+    // Add PCL-5 questions to the queue
+    const pcl5Ids = Array.from({ length: 20 }, (_, i) => `PCL-5_Q${i + 1}`);
+
+    const pcl5Questions: Record<string, any> = {};
+    const newQueueIds: string[] = [];
+
+    pcl5Data.questions.forEach((q) => {
+      // Format: "PCL-5_Q1"
+      const queueId = `PCL-5_Q${q.id}`;
+      newQueueIds.push(queueId);
+
+      // CHECK FOR PREVIOUSLY ANSWERED SCORE
+      const previousScore = existingScores[queueId];
+
+      // Format for DB: "Q1_PCL5"
+      const dbKey = `Q${q.id}_PCL5`;
+      pcl5Questions[dbKey] = {
+        id: q.id,
+        text: q.text,
+        score: previousScore !== undefined ? previousScore : null,
+        answered: previousScore !== undefined
+      };
+    });
+
+    const batch = adminDb.batch();
+
+    // Create the PCL-5 questions doc
+    batch.set(questionsCollection.doc('PCL-5'), {
       questions: pcl5Questions,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    
-    await adminDb.doc(`users/${userId}/sessions/${sessionId}`).update({
-      totalQuestions: 36,
+
+    // Update the session queue and metadata
+    const updatedUnanswered = [
+      ...(sessionData?.unanswered_question_ids || []),
+      ...pcl5Ids
+    ];
+
+    batch.update(sessionRef, {
       traumaDetected: true,
+      totalQuestions: 36, // PHQ-9(9) + GAD-7(7) + PCL-5(20)
+      unanswered_question_ids: updatedUnanswered,
     });
+
+    await batch.commit();
     
+    console.log('✅ PCL-5 successfully injected into queue.');
     return { success: true };
+
   } catch (error) {
     console.error('Error enabling PCL-5:', error);
     return { success: false, message: 'Failed to enable PCL-5 assessment' };
   }
 }
-
 
 
 // --------------------
@@ -239,33 +270,45 @@ export async function updateQuestionScores(
 ) {
   const adminDb = getAdminApp().firestore();
   const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
-  const questionsCollection = sessionRef.collection('questions');
+
+  // 1. Fetch current session state to check trauma status
+  const sessionSnap = await sessionRef.get();
+  const sessionData = sessionSnap.data();
+  
+  if (!sessionData) {
+    console.error('❌ Session not found');
+    return;
+  }
+
+  const traumaDetected = sessionData.traumaDetected || false;
 
   console.log('\n' + '='.repeat(80));
   console.log('🔄 UPDATE QUESTION SCORES');
 
+  const questionsCollection = sessionRef.collection('questions');
   const groupedUpdates: Record<string, Record<string, any>> = {};
 
+  // 2. Map flat backend IDs (PHQ-9_Q1) to DB nested keys (questions.Q1_PHQ9.score)
   for (const [flatId, score] of Object.entries(flatMapping)) {
-    // 1. Split "PHQ-9_Q1" into assessment ("PHQ-9") and question ("Q1")
-    const parts = flatId.split('_');
-    if (parts.length < 2) continue;
+    const [assessmentName, qPart] = flatId.split('_');
+    
+    // Skip PCL-5 updates if trauma has not been officially detected yet
+    if (assessmentName === 'PCL-5' && !traumaDetected) {
+      console.log(` ⏳ Skipping ${flatId} score: Trauma not yet detected.`);
+      continue;
+    }
 
-    const assessmentName = parts[0]; // e.g., "PHQ-9"
-    const qPart = parts[1];          // e.g., "Q1"
-
-    // 2. Format to match your DB keys: "Q1_PHQ9"
     const assessmentNoHyphen = assessmentName.replace(/-/g, '');
     const internalFieldId = `${qPart}_${assessmentNoHyphen}`;
 
     if (!groupedUpdates[assessmentName]) groupedUpdates[assessmentName] = {};
-
-    // 3. Target the 'questions' map specifically
+    
+    // Update specific fields within the 'questions' map
     groupedUpdates[assessmentName][`questions.${internalFieldId}.score`] = score;
     groupedUpdates[assessmentName][`questions.${internalFieldId}.answered`] = true;
   }
 
-  // 4. Execute the updates on the existing documents
+  // 3. Execute the updates on the sub-collection documents
   for (const [assessmentName, updates] of Object.entries(groupedUpdates)) {
     try {
       await questionsCollection.doc(assessmentName).update(updates);
@@ -276,28 +319,89 @@ export async function updateQuestionScores(
     }
   }
 
-  // 5. Calculate Progress 
+  // 4. Calculate Overall Progress and aggregate scores for the Summary
   const snapshot = await questionsCollection.get();
   let totalQuestions = 0;
   let answeredQuestions = 0;
+  const assessmentScores: Record<string, number> = {};
 
   snapshot.forEach(doc => {
-    const questions = doc.data().questions || {};
-    for (const [_, data] of Object.entries(questions)) {
+    const data = doc.data();
+    const questions = data.questions || {};
+    const assessmentName = doc.id; 
+    let assessmentSum = 0;
+
+    for (const [_, qData] of Object.entries(questions)) {
       totalQuestions++;
-      if ((data as any).score !== null || (data as any).answered === true) {
+      const val = (qData as any).score;
+      if (typeof val === 'number' || (qData as any).answered === true) {
         answeredQuestions++;
+        if (typeof val === 'number') assessmentSum += val;
       }
     }
+    assessmentScores[assessmentName] = assessmentSum;
   });
+  // If the backend has moved an ID to 'unanswered_question_ids' due to a contradiction,
+  // we must "un-count" it from the progress until it is resolved.
+  const unansweredQs = sessionData.unanswered_question_ids || [];
+  const pendingCount = unansweredQs.length;
 
-  const percentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+  // Ensure answeredCount doesn't go negative and reflects actual "completed" status
+  const effectiveAnswered = Math.max(0, answeredQuestions - pendingCount);
+
+  // 5. Calculate final %
+  const percentage = totalQuestions > 0 ? Math.round((effectiveAnswered / totalQuestions) * 100) : 0;
   
-  await sessionRef.update({
+  // The session is only "Sufficient" if all IDs are handled AND the queue is empty
+  const allAnswered = totalQuestions > 0 && effectiveAnswered >= totalQuestions && pendingCount === 0;
+  // 6. Prepare the main session document updates
+  const sessionUpdates: any = {
     completionPercentage: percentage,
-    answeredQuestions,
-    totalQuestions
-  });
+    answeredQuestions: effectiveAnswered,
+    totalQuestions,
+    sufficientDataCollected: allAnswered,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  // 7. IF FINISHED: Generate structured summaryData for the Summary Page
+  if (allAnswered) {
+    const userAnswers = sessionData.user_answers || [];
+    const latestAnswersMap = new Map();
+    userAnswers.forEach((entry: any) => {
+      latestAnswersMap.set(entry.question_id, {
+        text: entry.question,
+        finalAnswer: entry.answer,
+        evidence: entry.evidence,
+        isContradictory: entry.contradictory
+      });
+    });
+  
+    sessionUpdates.status = 'ended-complete';
+    
+    // Fetch the full questions to calculate percentages
+    const snapshot = await questionsCollection.get();
+    const fullMapping: DiagnosticMapping = {};
+    snapshot.forEach(doc => {
+      fullMapping[doc.id] = doc.data().questions || {};
+    });
+
+    const finalAssessments = calculateAssessments(fullMapping);
+
+    // Update the summaryData object
+    sessionUpdates.summaryData = {
+      assessments: finalAssessments,
+      clinicalInsight: generateClinicalInsight(finalAssessments),
+      detailedSymptoms: Array.from(latestAnswersMap.entries()).map(([id, data]) => ({
+        id,
+        score: flatMapping[id] || 0,
+        symptomsReported: data.evidence 
+          ? (data.isContradictory ? [`Clarified: ${data.evidence}`] : [data.evidence])
+          : ["No specific details provided."]
+      }))
+    };
+  }
+
+  await sessionRef.update(sessionUpdates);
 
   console.log(`📊 Progress Updated: ${answeredQuestions}/${totalQuestions} (${percentage}%)`);
 }
@@ -409,39 +513,41 @@ export async function postChatMessage(
     };
 
     const adminDb = getAdminApp().firestore();
+    const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
     const messagePath = `users/${userId}/sessions/${sessionId}/messages`;
-    
-    // UPDATED: User message with new fields
+
     const userMessageData = {
       role: 'user' as const,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       userId,
       text: assemblyAI_output.transcript,
-      // Audio data
       audio_sentiment: assemblyAI_output.sentiment,
       audio_confidence: assemblyAI_output.sentiment_confidence,
-      // Video data (store as emotions array)
       video_emotions: deepface_output ? Object.keys(deepface_output) : [],
     };
-    
     // Write user message to Firestore
     await adminDb.collection(messagePath).add(userMessageData);
-    
-    // Assistant message with new structure
+
     const assistantMessageData = {
       role: 'assistant' as const,
       text: text, 
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       userId,
-      
       conversation_type: metadata.conversation_type,
-      diagnostic_match: diagnostic_scores && Object.keys(diagnostic_scores).length > 0,
-      diagnostic_scores: diagnostic_scores || {}, 
       metadata: metadata, 
     };
-
     // Write assistant message to Firestore
     await adminDb.collection(messagePath).add(assistantMessageData);
+
+    if (emergency) {
+      await sessionRef.update({
+        status: 'emergency',
+        emergencyAt: admin.firestore.FieldValue.serverTimestamp(),
+        crisisDetected: true
+      });
+      revalidatePath('/chat');
+      return { success: true };
+    }
 
     // Update question scores if diagnostic data exists
     if (diagnostic_scores && Object.keys(diagnostic_scores).length > 0) {
