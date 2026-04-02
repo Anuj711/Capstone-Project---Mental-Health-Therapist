@@ -155,7 +155,7 @@ export function SessionSummary({
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-gray-700">Symptoms Reported:</p>
                     <ul className="space-y-1">
-                      {symptom.symptomsReported.map((symptomText, idx) => (
+                      {(symptom.symptomsReported || []).map((symptomText, idx) => (
                         <li key={idx} className="text-sm text-gray-600 flex items-start gap-2">
                           <span className="text-indigo-600 mt-1">•</span>
                           <span>{symptomText}</span>

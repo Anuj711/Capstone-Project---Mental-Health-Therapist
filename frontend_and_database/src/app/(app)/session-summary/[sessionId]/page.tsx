@@ -44,52 +44,47 @@ export default function SummaryPage({
 
       try {
         const sessionPath = `users/${user.uid}/sessions/${sessionId}`;
-        console.log('📍 Fetching session from:', sessionPath);
-        
         const sessionRef = doc(firestore, sessionPath);
         const sessionSnap = await getDoc(sessionRef);
 
-        console.log('📄 Session exists?', sessionSnap.exists());
-
         if (!sessionSnap.exists()) {
-          console.error('❌ Session document not found!');
           setError('Session not found');
           setLoading(false);
           return;
         }
-
-        const sessionData = sessionSnap.data();
-        console.log('📊 Session data:', sessionData);
-        console.log('🎯 Session status:', sessionData.status);
-        console.log('📈 Completion %:', sessionData.completionPercentage);
-        console.log('✅ Sufficient data:', sessionData.sufficientDataCollected);
+        console.log('📍 Fetching session from:', sessionPath);
         
+        const sessionData = sessionSnap.data();
         setSessionStatus(sessionData.status);
 
-        //Check for summary data in both ended-complete AND resumed states
-        const hasCompletedAssessment = sessionData.status === 'ended-complete' || 
-                                       sessionData.status === 'resumed' ||
-                                       sessionData.sufficientDataCollected === true;
-
-        if (hasCompletedAssessment && sessionData.summaryData) {
-          console.log('✅ Summary data found in session document');
-          
-          const data = {
-            sessionId,
-            timestamp:
-              sessionData.createdAt?.toDate?.()?.toLocaleString() || new Date().toLocaleString(),
-            assessments: sessionData.summaryData.assessments || [],
-            comorbidityInsight: sessionData.summaryData.clinicalInsight || 'Your responses have been recorded.',
-            detailedSymptoms: sessionData.summaryData.detailedSymptoms || [],
-          };
-
-          console.log('Summary data prepared from session:', data);
-          setSummaryData(data);
-        } else if (hasCompletedAssessment && !sessionData.summaryData) {
-          console.log('Assessment complete but no summary data found');
-          setError('Summary data not available');
-        } else {
-          console.log('Session not complete enough for summary');
+        const hasCompleted = sessionData.status === 'ended-complete' || 
+                            sessionData.status === 'resumed' ||
+                            sessionData.sufficientDataCollected === true;
+        
+        if (hasCompleted) {
+          if (sessionData.summaryData) {
+            // Use the structured summaryData if it exists
+            setSummaryData({
+              sessionId,
+              timestamp: sessionData.createdAt?.toDate?.()?.toLocaleString() || new Date().toLocaleString(),
+              assessments: sessionData.summaryData.assessments || [],
+              comorbidityInsight: sessionData.summaryData.clinicalInsight || 'Results recorded.',
+              detailedSymptoms: sessionData.summaryData.detailedSymptoms || [],
+            });
+          } else if (sessionData.diagnostic_scores) {
+            // Fallback: Build summary from diagnostic_scores and rolling_summary
+            setSummaryData({
+              sessionId,
+              timestamp: new Date().toLocaleString(),
+              assessments: [{ name: 'Session Overview', score: 'Calculated', status: 'Complete' }],
+              comorbidityInsight: sessionData.rolling_summary || 'Reviewing your responses...',
+              detailedSymptoms: Object.entries(sessionData.diagnostic_scores).map(([k, v]) => ({ 
+                id: k, 
+                score: v
+              }))});
+          } else {
+              setError('Summary data not available');
+          }
         }
       } catch (err) {
         console.error('Error fetching summary:', err);

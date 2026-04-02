@@ -60,6 +60,11 @@ export function useSessionManagement() {
     if (!user || !firestore || isCreatingSession.current) return;
 
     isCreatingSession.current = true;
+    const initialUnanswered = [
+      "PHQ-9_Q1", "PHQ-9_Q2", "PHQ-9_Q3", "PHQ-9_Q4", "PHQ-9_Q5", "PHQ-9_Q6", "PHQ-9_Q7", "PHQ-9_Q8", "PHQ-9_Q9",
+      "GAD-7_Q1", "GAD-7_Q2", "GAD-7_Q3", "GAD-7_Q4", "GAD-7_Q5", "GAD-7_Q6", "GAD-7_Q7"
+    ];
+
     try {
       const sessionName = getNextSessionName();
       const newSessionRef = await addDoc(
@@ -69,10 +74,16 @@ export function useSessionManagement() {
           name: sessionName,
           status: 'active',
           completionPercentage: 0,
-          totalQuestions: 16, // PHQ-9 (9) + GAD-7 (7)
+          totalQuestions: 16,
           answeredQuestions: 0,
           sufficientDataCollected: false,
           traumaDetected: false,
+          unanswered_question_ids: initialUnanswered,
+          question_tracker: {
+            current_qs_id: "PHQ-9_Q1",
+            next_qs_id: "PHQ-9_Q2",
+            current_qs_index: 0
+          }
         }
       );
 
