@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { X, Circle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface RecordingOverlayProps {
   isRecording: boolean;
@@ -22,10 +23,11 @@ export function RecordingOverlay({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  if (!isRecording) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center gap-4">
+    <div className={cn(
+      "fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center gap-4 transition-opacity duration-300",
+      isRecording ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+    )}>
       <div className="relative w-full max-w-md px-4">
         <video
           ref={videoPreviewRef}

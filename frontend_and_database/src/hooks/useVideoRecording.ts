@@ -27,15 +27,16 @@ export function useVideoRecording(onRecordingStop: (blob: Blob) => Promise<void>
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: 640, height: 480 },
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
         audio: true 
       });
       
       streamRef.current = stream;
       setIsRecording(true);
       
-      await new Promise(resolve => requestAnimationFrame(resolve));
-      
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      console.log("Video Ref current:", videoPreviewRef.current);
       if (videoPreviewRef.current && stream) {
         videoPreviewRef.current.srcObject = stream;
         try {
