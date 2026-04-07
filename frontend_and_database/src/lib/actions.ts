@@ -322,7 +322,7 @@ export async function updateQuestionScores(
   // 4. Calculate Overall Progress and aggregate scores for the Summary
   const snapshot = await questionsCollection.get();
   let totalQuestions = 0;
-  let answeredQuestions = 0;
+  let actuallyAnswered = 0;
   const assessmentScores: Record<string, number> = {};
 
   snapshot.forEach(doc => {
@@ -333,31 +333,26 @@ export async function updateQuestionScores(
 
     for (const [_, qData] of Object.entries(questions)) {
       totalQuestions++;
-      const val = (qData as any).score;
-      if (typeof val === 'number' || (qData as any).answered === true) {
-        answeredQuestions++;
-        if (typeof val === 'number') assessmentSum += val;
+      // Count it as answered ONLY if the boolean flag is true
+      if ((qData as any).answered === true) {
+        actuallyAnswered++;
       }
     }
     assessmentScores[assessmentName] = assessmentSum;
   });
-  // If the backend has moved an ID to 'unanswered_question_ids' due to a contradiction,
-  // we must "un-count" it from the progress until it is resolved.
-  const unansweredQs = sessionData.unanswered_question_ids || [];
-  const pendingCount = unansweredQs.length;
-
-  // Ensure answeredCount doesn't go negative and reflects actual "completed" status
-  const effectiveAnswered = Math.max(0, answeredQuestions - pendingCount);
 
   // 5. Calculate final %
-  const percentage = totalQuestions > 0 ? Math.round((effectiveAnswered / totalQuestions) * 100) : 0;
-  
+  const percentage = totalQuestions > 0 ? Math.round((actuallyAnswered / totalQuestions) * 100) : 0;
+ 
   // The session is only "Sufficient" if all IDs are handled AND the queue is empty
-  const allAnswered = totalQuestions > 0 && effectiveAnswered >= totalQuestions && pendingCount === 0;
+  const unansweredQs = sessionData.unanswered_question_ids || [];
+  const pendingCount = unansweredQs.length;
+  const allAnswered = totalQuestions > 0 && actuallyAnswered >= totalQuestions && pendingCount === 0;
+  
   // 6. Prepare the main session document updates
   const sessionUpdates: any = {
     completionPercentage: percentage,
-    answeredQuestions: effectiveAnswered,
+    answeredQuestions: actuallyAnswered,
     totalQuestions,
     sufficientDataCollected: allAnswered,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -403,7 +398,7 @@ export async function updateQuestionScores(
 
   await sessionRef.update(sessionUpdates);
 
-  console.log(`📊 Progress Updated: ${answeredQuestions}/${totalQuestions} (${percentage}%)`);
+  console.log(`📊 Progress Updated: ${actuallyAnswered}/${totalQuestions} (${percentage}%)`);
 }
 
 // --------------------
@@ -487,14 +482,20 @@ export async function postChatMessage(
   try {
     // Unpack the NEW response structure from backend
     const { 
-      text,                    // was bot_reply
-      diagnostic_scores,       // was diagnostic_mapping (now flat)
+      text,
+      diagnostic_scores,
       metadata,                
       assemblyAI_output, 
       deepface_output,
-      emergency 
+      emergency,
+      rolling_summary,
+      session_status,
+      completion_percentage,
+      sufficient_data
     } = aiResponse as {
       text: string;
+      rolling_summary?: string;
+      session_status?: string;
       diagnostic_scores: Record<string, number>; // Flat: {"Q1_PHQ9": 2}
       metadata: {
         conversation_type: string;
@@ -510,6 +511,8 @@ export async function postChatMessage(
       };
       deepface_output: Record<string, number>; // emotion probabilities
       emergency: boolean;
+      completion_percentage: number;
+      sufficient_data: boolean;
     };
 
     const adminDb = getAdminApp().firestore();
@@ -539,11 +542,32 @@ export async function postChatMessage(
     // Write assistant message to Firestore
     await adminDb.collection(messagePath).add(assistantMessageData);
 
+    // Write rolling summary and session status
+    const sessionUpdate: any = {
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (rolling_summary) {
+      sessionUpdate.rolling_summary = rolling_summary;
+    }
+    if (session_status) {
+      sessionUpdate.status = session_status;
+    }
+    if (completion_percentage !== undefined) {
+      sessionUpdate.completionPercentage = completion_percentage;
+    }
+    if (sufficient_data !== undefined) {
+      sessionUpdate.sufficientDataCollected = sufficient_data;
+    }
+
+    await sessionRef.update(sessionUpdate);
+
     if (emergency) {
       await sessionRef.update({
         status: 'emergency',
         emergencyAt: admin.firestore.FieldValue.serverTimestamp(),
-        crisisDetected: true
+        crisisDetected: true,
+        completionPercentage: 100, 
+        sufficientDataCollected: true
       });
       revalidatePath('/chat');
       return { success: true };
