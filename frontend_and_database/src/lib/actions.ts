@@ -519,6 +519,10 @@ export async function postChatMessage(
     const sessionRef = adminDb.doc(`users/${userId}/sessions/${sessionId}`);
     const messagePath = `users/${userId}/sessions/${sessionId}/messages`;
 
+    const sessionSnap = await sessionRef.get();
+    const sessionData = sessionSnap.data();
+    const alreadyInEmergency = sessionData?.crisisDetected === true;
+
     const userMessageData = {
       role: 'user' as const,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -559,19 +563,17 @@ export async function postChatMessage(
       sessionUpdate.sufficientDataCollected = sufficient_data;
     }
 
-    await sessionRef.update(sessionUpdate);
-
-    if (emergency) {
-      await sessionRef.update({
-        status: 'emergency',
-        emergencyAt: admin.firestore.FieldValue.serverTimestamp(),
-        crisisDetected: true,
-        completionPercentage: 100, 
-        sufficientDataCollected: true
-      });
-      revalidatePath('/chat');
-      return { success: true };
+    if (emergency && !alreadyInEmergency) {
+      console.log("🚨 FIRST TIME EMERGENCY: setting crisis detected");
+      
+      // Update local object first so updateQuestionScores sees the change
+      sessionUpdate.status = 'emergency';
+      sessionUpdate.crisisDetected = true;
+      sessionUpdate.emergencyAt = admin.firestore.FieldValue.serverTimestamp();
+      await updateQuestionScores(userId, sessionId, {});
     }
+
+    await sessionRef.update(sessionUpdate);
 
     // Update question scores if diagnostic data exists
     if (diagnostic_scores && Object.keys(diagnostic_scores).length > 0) {

@@ -114,6 +114,7 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
       const currentScores = sessionData?.diagnostic_scores || {};
       const tracker = sessionData?.question_tracker;
       const unanswered = sessionData?.unanswered_question_ids;
+      const crisis_detected_persistent = sessionData?.crisisDetected || false;
 
       console.log("🚀 [SENDING TO BACKEND]", {
         tracker: sessionData?.question_tracker,
@@ -130,7 +131,8 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         currentScores,
         sessionStatus,
         tracker,
-        unanswered
+        unanswered,
+        crisis_detected_persistent
       );
 
       console.log("📥 [RECEIVED FROM BACKEND]", {

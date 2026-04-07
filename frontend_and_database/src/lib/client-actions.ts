@@ -86,7 +86,8 @@ export async function sendFileUrlToPythonAPI(
   diagnostic_scores: any,
   session_status: string,
   question_tracker: any,
-  unanswered_question_ids: string[]
+  unanswered_question_ids: string[],
+  crisis_detected: boolean
 ) {
   try {
     if (!question_tracker || !unanswered_question_ids) {
@@ -104,7 +105,8 @@ export async function sendFileUrlToPythonAPI(
       diagnostic_scores,
       session_status,
       question_tracker,
-      unanswered_question_ids
+      unanswered_question_ids,
+      crisis_detected
     };
 
     console.log("DEBUG: Sending Payload to Python:", payload);

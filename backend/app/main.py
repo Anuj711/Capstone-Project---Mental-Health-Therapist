@@ -69,7 +69,8 @@ def analyze_turn():
             "emergency": <true/false>,
             "triggered word": <word> [optional],
             "trauma_detected": <true/false>,
-            "sufficientDataCollected": True/False
+            "sufficientDataCollected": True/False,
+            "crisis_detected": True/False
         }
     """
 
@@ -81,6 +82,7 @@ def analyze_turn():
     existing_scores = data.get("diagnostic_scores") or {}
     session_status = data.get("session_status", "active")
     last_bot_reply = data.get("last_bot_reply", None)
+    previously_in_crisis = data.get('crisis_detected', False)
 
     # Retrieval of session-specific state from payload
     incoming_tracker = data.get("question_tracker") or {}
@@ -107,6 +109,8 @@ def analyze_turn():
     current_question_text = get_question_data(current_qid)
     next_question_text = get_question_data(incoming_tracker.get("next_qs_id"))
 
+    crisis_detected = previously_in_crisis
+
     # Step 3a: Update rolling summary and user answers
     model_output = update_rolling_info_and_get_reply(
         assembly_data, deepface_data, rolling_summary,
@@ -114,33 +118,6 @@ def analyze_turn():
         current_question_text, next_question_text, 
         previous_bot_reply=last_bot_reply,
         session_status=session_status)
-    
-    is_emergency = model_output.get("is_emergency") or False
-    trigger_word = model_output.get("trigger_word") or ""
-    if is_emergency:
-        emergency_response = {
-            "text": "It sounds like you might be in distress. Please reach out to immediate help:\n\nNational Suicide Prevention Lifeline: 988 (US)\nCrisis Text Line: Text HOME to 741741\n\nYou're not alone.",
-            "diagnostic_scores": {},
-            "metadata": {
-                "conversation_type": "crisis",
-                "crisis_detected": True,
-                "audio_video_alignment": "aligned",
-                "confidence_level": "high"
-            },
-            "user_answers": user_answers,
-            "rolling_summary": rolling_summary,
-            "assemblyAI_output": assembly_data,
-            "deepface_output": deepface_data,
-            "diagnostic_match": False,
-            "emergency": True,
-            "triggered_word": trigger_word,
-            "trauma_detected": False,
-            "session_status": "ended-complete",
-            "sufficientDataCollected": True,
-            "question_tracker": incoming_tracker,
-            "unanswered_question_ids": incoming_unanswered
-        }
-        return jsonify(emergency_response), 200
 
     updated_summary = model_output.get("updated_summary") or ""
     updated_answers = model_output.get("updated_user_answers") or []
@@ -149,6 +126,12 @@ def analyze_turn():
     user_answers = deduplicate_user_answers(user_answers, updated_answers)
 
     bot_reply = model_output.get("bot_reply", "")
+
+    is_emergency = model_output.get("is_emergency") or False
+    trigger_word = model_output.get("trigger_word") or ""
+    if not previously_in_crisis and is_emergency:
+        bot_reply = "It sounds like you might be in distress. Please reach out to immediate help:\n\nNational Suicide Prevention Lifeline: 988 (US)\nCrisis Text Line: Text HOME to 741741\n\nYou're not alone."
+        crisis_detected = True
 
     contradictions = model_output.get("contradictions") or {}
     is_contradictory = contradictions.get("contradictory") or False
@@ -209,7 +192,11 @@ def analyze_turn():
     if not current_qid and session_status != "resumed" and (len(incoming_unanswered)-1) <= 0:
         final_session_status = "ended-complete"
         sufficient_data = True
-        bot_reply = "We've covered all the specific areas I wanted to check on today. Thank you for being so open with me. You can now view your session summary."
+        end_rsp = "We've covered all the specific areas I wanted to check on today. Thank you for being so open with me. You can now view your session summary."
+        if is_emergency:
+            bot_reply = end_rsp + "It sounds like you might be in distress. Please reach out to immediate help:\n\nNational Suicide Prevention Lifeline: 988 (US)\nCrisis Text Line: Text HOME to 741741\n\nYou're not alone.\n\n"
+        else:
+            bot_reply = end_rsp
     else:
         final_session_status = session_status
         sufficient_data = data.get("sufficientDataCollected", False)
@@ -258,7 +245,7 @@ def analyze_turn():
     # GUARDRAIL AGAINST BOT HALLUCINATION REPLIES
     # When to force the next question
     # If needs_followup is False and it's not the end of the session, we MUST have a question.
-    if not needs_followup and not is_contradictory and final_session_status != "ended-complete":
+    if not needs_followup and not is_contradictory and not is_emergency and final_session_status != "ended-complete":
         bot_reply_lower = bot_reply.lower()
         # 1.Get the core symptom text and split into words longer than 3 chars
         raw_symptom_text = next_question_text.split(":")[-1].strip().lower()
@@ -300,7 +287,7 @@ def analyze_turn():
         "diagnostic_scores": score_updates_for_firestore,
         "metadata": {
             "conversation_type": mode_indicator,
-            "crisis_detected": False,
+            "crisis_detected": crisis_detected,
             "audio_video_alignment": alignment,
             "confidence_level": confidence_level
         },
@@ -309,7 +296,7 @@ def analyze_turn():
         "assemblyAI_output": assembly_data,
         "deepface_output": deepface_data,
         "diagnostic_match": len(score_updates_for_firestore) > 0,
-        "emergency": False,
+        "emergency": True if (is_emergency and not previously_in_crisis) else False,
         "trauma_detected": trauma_detected,
         "session_status": final_session_status,
         "sufficientDataCollected": sufficient_data,
