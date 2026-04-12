@@ -80,15 +80,15 @@ function JournalCard({ entry, onInitiateDelete, onView, onEdit, featured = false
       )}
     >
       <CardHeader className="space-y-3">
-        <div className="flex justify-between items-start gap-2">
-          <CardDescription className="text-sm text-gray-500">
+        <div className="flex justify-between items-center">
+          <CardDescription className="text-xs text-gray-500">
             {format(createdAt, "MMMM d, yyyy 'at' h:mm a")}
           </CardDescription>
-        </div>
+        
         <Badge 
           variant="outline" 
           className={cn(
-            "flex items-center gap-2 w-fit rounded-full px-3 py-1",
+            "flex items-center gap-2 w-fit rounded-full px-2 py-1",
             moodDetail.bgColor,
             moodDetail.color
           )}
@@ -96,15 +96,16 @@ function JournalCard({ entry, onInitiateDelete, onView, onEdit, featured = false
           {moodDetail.icon}
           <span className="font-semibold text-xs">{entry.mood}</span>
         </Badge>
+        </div>
       </CardHeader>
       
       <CardContent className="flex-grow">
         {featured ? (
           <>
-            <h3 className="text-lg font-semibold text-gray-700 mb-3 line-clamp-2">
+            <h3 className="text-md font-semibold text-gray-700 mb-3 line-clamp-2">
               {entry.content.split('\n')[0] || entry.content.substring(0, 60)}
             </h3>
-            <p className="text-gray-600 line-clamp-6 leading-relaxed">
+            <p className="text-sm text-gray-600 line-clamp-6 leading-relaxed">
               {entry.content}
             </p>
           </>
@@ -230,10 +231,10 @@ export function JournalList({ initialEntries, isLoading }: JournalListProps) {
     return (
       <div className="text-center py-20 border-2 border-dashed border-gray-300 rounded-2xl bg-white">
         <div className="max-w-md mx-auto">
-          <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Edit className="h-8 w-8 text-indigo-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-700 mb-2">No entries yet</h2>
+          <h2 className="text-lg font-bold text-gray-700 mb-2">No entries yet</h2>
           <p className="text-gray-600">
             Start your mindful journey by creating your first journal entry.
           </p>
@@ -268,7 +269,7 @@ export function JournalList({ initialEntries, isLoading }: JournalListProps) {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setEntryToDelete(null)}>
+                <AlertDialogCancel onClick={() => setEntryToDelete(null)} className='bg-white/10 text-black hover:bg-textPrimary hover:text-white border-2'>
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction 
@@ -323,7 +324,7 @@ export function JournalList({ initialEntries, isLoading }: JournalListProps) {
               </div>
               <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
                 <Button
-                  variant="outline"
+                  className='bg-white/10 text-black hover:bg-red-700 hover:text-white border-2'
                   onClick={() => setViewEntry(null)}
                 >
                   Close

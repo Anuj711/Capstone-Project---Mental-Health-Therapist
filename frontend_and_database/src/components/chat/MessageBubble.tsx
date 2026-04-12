@@ -16,7 +16,7 @@ export function MessageBubble({ msg, userPhotoURL, userDisplayName }: MessageBub
   return (
     <div className={cn('flex items-start gap-3', isAssistant ? '' : 'justify-end')}>
       {isAssistant && (
-        <Avatar className="h-8 w-8 mt-1 flex-shrink-0">
+        <Avatar className="h-6 w-6 mt-1 flex-shrink-0">
           <AvatarImage src="/bot.png" alt="AI Therapist" className="object-cover" />
           <AvatarFallback className="bg-textPrimary text-white">
             <Sparkles className="h-4 w-4" />
@@ -25,7 +25,7 @@ export function MessageBubble({ msg, userPhotoURL, userDisplayName }: MessageBub
       )}
       <div
         className={cn(
-          'max-w-[70%] rounded-2xl px-4 py-3 break-words',
+          'max-w-[70%] rounded-2xl px-3 py-2 break-words',
           isAssistant
             ? 'bg-gray-100 text-gray-900'
             : 'bg-textPrimary  to-purple-600 text-white'
@@ -37,7 +37,7 @@ export function MessageBubble({ msg, userPhotoURL, userDisplayName }: MessageBub
           </div>
         )}
         
-        {msg.text && <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
+        {msg.text && <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
 
         {msg.mediaUrl && (
           <div className="mt-2">
@@ -54,7 +54,7 @@ export function MessageBubble({ msg, userPhotoURL, userDisplayName }: MessageBub
               msg.mediaUrl.match(/\.(mp4|webm)$/i) ? (
               <video src={msg.mediaUrl} width={300} controls className="rounded-lg" />
             ) : (
-              <div className="p-2 bg-white/10 rounded-lg text-sm">
+              <div className="p-2 bg-white/10 rounded-lg text-xs">
                 <a
                   href={msg.mediaUrl}
                   target="_blank"

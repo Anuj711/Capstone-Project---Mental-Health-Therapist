@@ -40,15 +40,15 @@ export function SessionsList({
 }: SessionsListProps) {
   return (
     <Card className="flex flex-col h-full border-gray-200 mx-2 overflow-hidden">
-      <CardHeader className="pb-3 border-b flex-shrink-0">
-        <CardTitle className="text-sm font-semibold">Past Sessions</CardTitle>
-        <CardDescription className="text-xs">Review your history</CardDescription>
+      <CardHeader className="pb-2 border-b flex-shrink-0">
+        <CardTitle className="text-xs font-semibold">Past Sessions</CardTitle>
+        <CardDescription className="text-[0.6rem]">Review your history</CardDescription>
       </CardHeader>
 
       <CardContent className="flex flex-col flex-1 min-h-0 p-0 overflow-hidden">
-        <div className="px-6 pb-3 pt-3 flex-shrink-0">
+        <div className="px-3 pb-2 pt-2 flex-shrink-0">
           <Button
-            className="w-full bg-textPrimary hover:to-textSecondary hover:text-black text-white"
+            className="text-[0.6rem] w-full bg-textPrimary hover:to-textSecondary hover:text-black text-white"
             onClick={onNewSession}
             size="sm"
           >
@@ -67,7 +67,7 @@ export function SessionsList({
                 sessions.map((session) => (
                   <div
                     key={session.id}
-                    className="group flex items-center justify-between w-full px-3 py-2 rounded-md border border-transparent hover:border-gray-200 hover:bg-gray-50 transition"
+                    className="group flex items-center justify-between w-full px-2 py-1.5 rounded-md border border-transparent hover:border-gray-200 hover:bg-gray-50 transition"
                   >
                     {editingSessionId === session.id ? (
                       <div className="flex items-center gap-1 w-full">
@@ -84,7 +84,7 @@ export function SessionsList({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 flex-shrink-0"
+                          className="h-7 w-7 flex-shrink-0 bg-white/10 text-black border-2 hover:bg-textPrimary hover:text-white"
                           onClick={onRenameSubmit}
                         >
                           <span className="text-xs">✓</span>
@@ -92,7 +92,7 @@ export function SessionsList({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 flex-shrink-0"
+                          className="h-7 w-7 flex-shrink-0 bg-white/10 text-black border-2 hover:bg-red-600 hover:text-white"
                           onClick={onRenameCancel}
                         >
                           <span className="text-xs">✕</span>
@@ -104,10 +104,10 @@ export function SessionsList({
                           onClick={() => onSelectSession(session.id)}
                           className="flex flex-col text-left flex-1 min-w-0"
                         >
-                          <span className="text-sm font-medium truncate">
+                          <span className="text-xs font-medium truncate">
                             {session.name}
                           </span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-[0.6rem] text-gray-500">
                             {session.completionPercentage === 100
                               ? 'Completed'
                               : `${session.completionPercentage}% complete`}
@@ -118,7 +118,7 @@ export function SessionsList({
                           <button
                             onClick={() => onResume(session.id)}
                             title="Resume"
-                            className="p-1 hover:text-green-600"
+                            className="p-1 hover:text-textPrimary"
                           >
                             <PlayCircle className="h-4 w-4" />
                           </button>
@@ -126,7 +126,7 @@ export function SessionsList({
                           <button
                             onClick={() => onRename(session)}
                             title="Rename"
-                            className="p-1 hover:text-blue-600"
+                            className="p-1 hover:text-textPrimary"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>

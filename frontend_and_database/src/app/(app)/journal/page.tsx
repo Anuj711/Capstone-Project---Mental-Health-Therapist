@@ -30,12 +30,12 @@ export default function JournalPage() {
   }) || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-6 py-8">
       {/* Header Section */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">My Journal</h1>
-          <p className="text-gray-600 text-sm mt-2">
+          <h1 className="text-xl font-bold text-gray-700">My Journal</h1>
+          <p className="text-gray-600 text-sm">
             A safe space for your thoughts, emotions, and daily reflections
           </p>
         </div>

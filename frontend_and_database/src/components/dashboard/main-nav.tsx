@@ -52,7 +52,7 @@ export function MainNav() {
               key={route.href}
               href={route.href}
               className={cn(
-                'flex items-center gap-2 text-sm font-medium transition-colors hover:text-indigo-600 relative group',
+                'flex items-center gap-2 text-xs font-medium transition-colors hover:text-indigo-600 relative group',
                 route.active
                   ? 'text-indigo-600 font-semibold'
                   : 'text-gray-600'

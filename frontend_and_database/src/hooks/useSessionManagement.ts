@@ -4,21 +4,16 @@ import { collection, addDoc, serverTimestamp, query, orderBy, doc, setDoc } from
 import { buildQuestionnaireItems } from '@/lib/questionnaireItems';
 import { useToast } from '@/hooks/use-toast';
 import { Session } from '@/lib/definitions';
-import { useSearchParams } from 'next/navigation';
 
-export function useSessionManagement() {
+export function useSessionManagement(initialSessionId?: string | null) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const searchParams = useSearchParams();
+
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const isCreatingSession = useRef(false);
   const hasInitialized = useRef(false);
 
-  // Get session ID from URL if present
-  const urlSessionId = searchParams.get('session');
-
-  // Firestore query for sessions
   const sessionsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(
@@ -27,10 +22,8 @@ export function useSessionManagement() {
     );
   }, [user, firestore]);
 
-  // Fetch sessions from Firestore
   const { data: rawSessions, isLoading: sessionsLoading } = useCollection(sessionsQuery);
 
-  // Map raw Firestore docs to typed Session[]
   const sessions: Session[] | undefined = rawSessions?.map(s => ({
     id: s.id,
     name: s.name || 'Unnamed Session',
@@ -43,7 +36,6 @@ export function useSessionManagement() {
 
   const activeSession = sessions?.find(s => s.id === activeSessionId);
 
-  // Generate a unique new session name
   const getNextSessionName = () => {
     if (!sessions) return 'Session 1';
     let counter = 1;
@@ -55,14 +47,15 @@ export function useSessionManagement() {
     return name;
   };
 
-  // Create a new session
   const handleNewSession = async () => {
     if (!user || !firestore || isCreatingSession.current) return;
 
     isCreatingSession.current = true;
     const initialUnanswered = [
-      "PHQ-9_Q1", "PHQ-9_Q2", "PHQ-9_Q3", "PHQ-9_Q4", "PHQ-9_Q5", "PHQ-9_Q6", "PHQ-9_Q7", "PHQ-9_Q8", "PHQ-9_Q9",
-      "GAD-7_Q1", "GAD-7_Q2", "GAD-7_Q3", "GAD-7_Q4", "GAD-7_Q5", "GAD-7_Q6", "GAD-7_Q7"
+      "PHQ-9_Q1", "PHQ-9_Q2", "PHQ-9_Q3", "PHQ-9_Q4", "PHQ-9_Q5",
+      "PHQ-9_Q6", "PHQ-9_Q7", "PHQ-9_Q8", "PHQ-9_Q9",
+      "GAD-7_Q1", "GAD-7_Q2", "GAD-7_Q3", "GAD-7_Q4",
+      "GAD-7_Q5", "GAD-7_Q6", "GAD-7_Q7"
     ];
 
     try {
@@ -87,22 +80,16 @@ export function useSessionManagement() {
         }
       );
 
-      // Initialize questionnaire subcollection (only PHQ-9 and GAD-7)
       const questionnaireCollection = collection(newSessionRef, 'questions');
       const questionnaires = buildQuestionnaireItems();
-      
-      // Only create PHQ-9 and GAD-7, not PCL-5
       for (const [assessmentName, questions] of Object.entries(questionnaires)) {
-        if (assessmentName === 'PCL-5') continue; // Skip PCL-5 initially
-        
+        if (assessmentName === 'PCL-5') continue;
         const questionnaireDoc = doc(questionnaireCollection, assessmentName);
-        await setDoc(questionnaireDoc, {
-          createdAt: serverTimestamp(),
-          questions,
-        });
+        await setDoc(questionnaireDoc, { createdAt: serverTimestamp(), questions });
       }
 
       setActiveSessionId(newSessionRef.id);
+      return newSessionRef.id;
     } catch (error) {
       console.error('Failed to create new session:', error);
       toast({
@@ -110,37 +97,32 @@ export function useSessionManagement() {
         description: 'Could not create a new session.',
         variant: 'destructive',
       });
+      return null;
     } finally {
       isCreatingSession.current = false;
     }
   };
 
-  // Set session as active - prioritize URL param, then first session, then create new
   useEffect(() => {
     if (sessionsLoading || hasInitialized.current) return;
 
     if (sessions && sessions.length > 0) {
-      // If URL has session param, try to use that
-      if (urlSessionId) {
-        const sessionExists = sessions.some(s => s.id === urlSessionId);
-        if (sessionExists) {
-          console.log('✅ Setting active session from URL:', urlSessionId);
-          setActiveSessionId(urlSessionId);
+      // Use initialSessionId (from URL) if valid, otherwise first session
+      if (initialSessionId) {
+        const exists = sessions.some(s => s.id === initialSessionId);
+        if (exists) {
+          setActiveSessionId(initialSessionId);
           hasInitialized.current = true;
           return;
         }
       }
-      
-      // Otherwise use first session
-      if (activeSessionId === null) {
-        setActiveSessionId(sessions[0].id);
-        hasInitialized.current = true;
-      }
+      setActiveSessionId(sessions[0].id);
+      hasInitialized.current = true;
     } else if (user && sessions && sessions.length === 0) {
       handleNewSession();
       hasInitialized.current = true;
     }
-  }, [sessions, sessionsLoading, user, activeSessionId, urlSessionId]);
+  }, [sessions, sessionsLoading, user, initialSessionId]);
 
   return {
     activeSessionId,

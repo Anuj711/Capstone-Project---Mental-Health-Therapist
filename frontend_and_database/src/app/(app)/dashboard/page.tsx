@@ -10,7 +10,7 @@ export default function Dashboard() {
     useDashboardData();
 
   return (
-    <div className="space-y-8 font-inter">
+    <div className="space-y-8 font-inter px-6 py-8">
       <WelcomeSection />
 
       <StatsGrid

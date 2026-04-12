@@ -238,24 +238,26 @@ function calculateAssessments(diagnosticMapping: DiagnosticMapping) {
 // GENERATE CLINICAL INSIGHT
 // --------------------
 function generateClinicalInsight(assessments: any[]) {
-  const moderateOrHigher = assessments.filter(a => 
+  // Anything under 10% gets the all-clear message
+  const allVeryLow = assessments.every(a => a.percentage <= 10);
+  if (allVeryLow) {
+    return 'Your responses suggest no significant symptoms at this time. This is a great sign — keep taking care of yourself, and feel free to return anytime if you ever feel you need support.';
+  }
+
+  const moderateOrHigher = assessments.filter(a =>
     a.severity !== 'Minimal' && a.severity !== 'Below Threshold'
   );
 
   if (moderateOrHigher.length === 0) {
-    return 'Your responses indicate minimal symptoms across all assessed areas. Continue monitoring your mental health and reach out to a professional if symptoms develop.';
+    // 10–moderate range — minimal symptoms but worth acknowledging
+    return 'Your responses indicate minimal symptoms across all assessed areas. Continue to check in with yourself, and consider speaking with a professional if you notice these feelings intensifying.';
   } else if (moderateOrHigher.length === 1) {
     const assessment = moderateOrHigher[0];
-    const disorder = assessment.name;
-    const severityLevel = assessment.severity.toLowerCase();
-    
-    return `Your responses suggest ${severityLevel} symptoms consistent with ${disorder}. A licensed mental health provider can provide a comprehensive evaluation and discuss appropriate treatment options.`;
+    return `Your responses suggest ${assessment.severity.toLowerCase()} symptoms consistent with ${assessment.name}. A licensed mental health provider can provide a comprehensive evaluation and discuss appropriate support options.`;
   } else {
-    // Multiple disorders - describe each with severity
-    const disorderDescriptions = moderateOrHigher.map(a => 
+    const disorderDescriptions = moderateOrHigher.map(a =>
       `${a.severity.toLowerCase()} ${a.name}`
     ).join(', ');
-    
     return `Your responses suggest overlapping symptoms including ${disorderDescriptions}. This comorbidity pattern is common, and a licensed mental health provider can help clarify the best support approach for you.`;
   }
 }
@@ -386,13 +388,14 @@ export async function updateQuestionScores(
     sessionUpdates.summaryData = {
       assessments: finalAssessments,
       clinicalInsight: generateClinicalInsight(finalAssessments),
-      detailedSymptoms: Array.from(latestAnswersMap.entries()).map(([id, data]) => ({
-        id,
-        score: flatMapping[id] || 0,
-        symptomsReported: data.evidence 
-          ? (data.isContradictory ? [`Clarified: ${data.evidence}`] : [data.evidence])
-          : ["No specific details provided."]
-      }))
+      detailedSymptoms: finalAssessments.map((a) => ({
+        disorder: a.name,
+        likelihood: a.percentage,
+        symptomsReported: [
+          `${a.score} out of ${a.maxScore} total points reported`,
+          `Severity level: ${a.severity}`,
+        ],
+      })),
     };
   }
 

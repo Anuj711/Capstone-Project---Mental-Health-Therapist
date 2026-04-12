@@ -21,9 +21,9 @@ export function UserNav() {
   const { user } = useUser();
   const auth = useAuth();
 
- const router = useRouter();
+  const router = useRouter();
 
-const handleSignOut = async () => {
+  const handleSignOut = async () => {
     if (auth) {
       await signOut(auth);
       router.push('/'); 
@@ -78,12 +78,6 @@ const handleSignOut = async () => {
           <Link href="/account" className="cursor-pointer">
             <User className="mr-2 h-4 w-4" />
             <span>Account Settings</span>
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/consent" className="cursor-pointer">
-            <Shield className="mr-2 h-4 w-4" />
-            <span>Consent Settings</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

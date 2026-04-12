@@ -174,16 +174,16 @@ export default function SummaryPage({
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center space-y-6">
           <div className="flex justify-center">
-            <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center">
+            <div className="h-12 w-12 bg-amber-100 rounded-full flex items-center justify-center">
               <AlertCircle className="h-8 w-8 text-amber-600" />
             </div>
           </div>
           
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            <h1 className="text-xl font-bold text-gray-900 mb-2">
               Session Ended Early
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm text-gray-600">
               You ended this session before completing all diagnostic questions. 
               Your progress has been saved.
             </p>
@@ -194,7 +194,7 @@ export default function SummaryPage({
               onClick={handleResume}
               disabled={resuming}
               size="lg"
-              className="w-full bg-textPrimary hover:from-indigo-700 hover:to-purple-700"
+              className="w-full bg-textPrimary hover:textPrimary/10 text-white hover:text-black"
             >
               {resuming ? (
                 <>
@@ -204,16 +204,15 @@ export default function SummaryPage({
               ) : (
                 <>
                   <MessageSquare className="h-5 w-5 mr-2" />
-                  Resume Session
+                  Resume Chat
                 </>
               )}
             </Button>
 
             <Button
               onClick={() => router.push('/chat')}
-              variant="outline"
               size="lg"
-              className="w-full"
+              className="w-full border-2 bg-white/10"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Sessions
@@ -228,7 +227,7 @@ export default function SummaryPage({
     );
   }
 
-  // CHANGED: Show summary for BOTH ended-complete AND resumed statuses
+  //Show summary for BOTH ended-complete AND resumed statuses
   if ((sessionStatus === 'ended-complete' || sessionStatus === 'resumed') && summaryData) {
     console.log('✅ Rendering session summary (status:', sessionStatus, ')');
     
@@ -244,10 +243,10 @@ export default function SummaryPage({
             <div className="text-center space-y-4">
               {isAlreadyResumed ? (
                 <>
-                  <h3 className="text-xl font-semibold text-gray-900">
+                  <h3 className="text-lg font-semibold text-gray-900">
                     Currently in Free-Talk Mode
                   </h3>
-                  <p className="text-gray-600 max-w-2xl mx-auto">
+                  <p className="text-sm text-gray-600 max-w-2xl mx-auto">
                     You're already in free-talk mode! Continue your conversation or start a new session.
                   </p>
                 </>
@@ -256,7 +255,7 @@ export default function SummaryPage({
                   <h3 className="text-xl font-semibold text-gray-900">
                     Want to Talk More?
                   </h3>
-                  <p className="text-gray-600 max-w-2xl mx-auto">
+                  <p className="text-gray-600 max-w-2xl mx-auto text-sm">
                     Assessment complete! You can resume this session for free-form conversation 
                     about anything on your mind, or start a new session with fresh diagnostic questions.
                   </p>
@@ -270,24 +269,24 @@ export default function SummaryPage({
                     size="lg"
                     className="bg-textPrimary hover:from-indigo-700 hover:to-purple-700"
                   >
-                    <MessageSquare className="h-5 w-5 mr-2" />
+                    <MessageSquare className="h-3 w-3 mr-2" />
                     Back to Conversation
                   </Button>
                 ) : (
                   <Button
                     onClick={handleResume}
                     disabled={resuming}
-                    size="lg"
-                    className="bg-textPrimary hover:from-indigo-700 hover:to-purple-700"
+                    size="sm"
+                    className="bg-textPrimary hover:from-indigo-700 hover:to-purple-700 text-black text-xs"
                   >
                     {resuming ? (
                       <>
-                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        <Loader2 className="h-3 w-5 mr-3 animate-spin" />
                         Resuming...
                       </>
                     ) : (
                       <>
-                        <MessageSquare className="h-5 w-5 mr-2" />
+                        <MessageSquare className="h-3 w-3 mr-2" />
                         Continue Free Talk
                       </>
                     )}
@@ -296,10 +295,10 @@ export default function SummaryPage({
 
                 <Button
                   onClick={() => router.push('/chat')}
-                  variant="outline"
-                  size="lg"
+                  className='border-2 bg-white/10 hover:textPrimary text-black text-xs'
+                  size="sm"
                 >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  <ArrowLeft className="h-3 w-3 mr-2" />
                   Back to Sessions
                 </Button>
               </div>

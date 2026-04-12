@@ -58,8 +58,8 @@ const benefitCards: BenefitCard[] = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen px-12 pt-12 bg-brandPrimary">
-      <header className="flex items-center justify-between mb-16 ">
+    <main className="min-h-screen px-12 pt-8 bg-brandPrimary overflow-x-hidden">
+      <header className="flex items-center justify-between mb-12 ">
         <nav className="flex items-center gap-8 text-sm font-bold">
           <Link href="/" className="hover:underline">Home</Link>
           <Link href="/about" className="hover:underline">About</Link>
@@ -77,20 +77,20 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      <section className="flex items-center gap-12">
+      <section className="flex items-center gap-12 pb-12">
         <div className="w-1/2">
-          <h1 className="text-4xl font-bold leading-tight">
+          <h1 className="text-2xl font-bold leading-tight">
             AI Therapist
           </h1>
 
-          <h2 className="text-6xl font-bold leading-tight mt-1 text-textPrimary">
+          <h2 className="text-5xl font-bold leading-tight mt-1 text-textPrimary">
             Online Mental
           </h2>
-          <h2 className="text-6xl font-bold leading-tight mt-1 text-textSecondary">
+          <h2 className="text-5xl font-bold leading-tight mt-1 text-textSecondary">
             Health Support
           </h2>
 
-          <p className="mt-4 max-w-md text-muted-foreground">
+          <p className="mt-4 max-w-md text-muted-foreground text-base leading-relaxed">
             Chat with our AI therapist 24/7.
             <br />
             Private, Secure and always Available.
@@ -115,11 +115,19 @@ export default function Home() {
             />
           </div>
         </div>
-       
+
       </section>     
-     
+      
+       {/* Disclaimer Banner */}
+        <div className="mt-4 bg-background border rounded-2xl px-6 py-4 flex items-start gap-3">
+          <span className="text-yellow-500 text-lg mt-0.5">⚠️</span>
+          <p className="text-xs text-yellow-800">
+            <span className="font-semibold">Please note:</span> This tool is intended for informational purposes only and is not a substitute for professional mental health care. If you are experiencing a mental health crisis or need a diagnosis, please consult a qualified mental health professional.
+          </p>
+        </div>  
+
       <section className="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] 
-      bg-background py-20 mt-32 flex px-6">
+      bg-background py-20 mt-16 flex px-6">
         <div className="w-full max-w-7xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                 
