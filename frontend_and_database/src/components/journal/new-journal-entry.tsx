@@ -44,7 +44,7 @@ type NewEntryFormState = z.infer<typeof NewEntrySchema>;
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" disabled={pending} className='bg-textPrimary hover:bg-textPrimary/70 text-white'>
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
       Save Entry
     </Button>
@@ -100,21 +100,21 @@ export function NewJournalEntry() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button disabled={!user} className="bg-textPrimary hover:bg-textPrimary/90 text-white">
+        <Button disabled={!user} className="bg-textPrimary hover:bg-textPrimary/90 text-white text-sm">
           <PlusCircle className="mr-2 h-4 w-4" /> New Entry
         </Button>
       </SheetTrigger>
         <SheetContent className="sm:max-w-lg w-[90vw] flex flex-col">
         <SheetHeader>
           <SheetTitle className="font-headline">How are you feeling?</SheetTitle>
-          <SheetDescription>
+          <SheetDescription className="text-xs">
             Take a moment to write down your thoughts. Don't worry about grammar or spelling.
           </SheetDescription>
         </SheetHeader>
         <form action={onFormAction} className="flex-1 flex flex-col gap-6 py-4 overflow-y-auto">
           <input type="hidden" name="userId" value={user?.uid || ''} />
           <div className="grid gap-2 px-1">
-            <Label>How are you feeling right now?</Label>
+            <Label>What emotion are you experiencing?</Label>
             <div className="flex gap-2 flex-wrap">
               {MOODS.map((mood) => (
                 <button
@@ -154,7 +154,7 @@ export function NewJournalEntry() {
         
         <SheetFooter>
           <SheetClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button className='bg-white/10 text-black hover:bg-red-700 hover:text-white border-2'>Cancel</Button>
           </SheetClose>
           <SubmitButton />
         </SheetFooter>

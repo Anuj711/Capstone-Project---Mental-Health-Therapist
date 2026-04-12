@@ -79,7 +79,7 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
   const handleRecordingStop = async (blob: Blob) => {
     if (!blob) return;
 
-    if (!sessionData?.question_tracker || !sessionData?.unanswered_question_ids) {
+    if (sessionStatus === 'active' && (!sessionData?.question_tracker || !sessionData?.unanswered_question_ids)) {
       toast({
         title: "Initializing Session...",
         description: "Please wait a second for the session to sync and try again.",
@@ -226,16 +226,15 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
   return (
     <div className="w-full h-full flex flex-col bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b bg-white">
+      <div className="flex-shrink-0 px-4 py-3 border-b bg-white">
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-gray-500 fill-gray-500" />
-              <h2 className="text-sm font-semibold text-gray-700">
-                {isResumedMode ? 'Free Talk Session' : 'Therapy Conversation'}
+              <h2 className="text-xs font-semibold text-gray-700">
+                {sessionName} - {isResumedMode ? 'Free Talk Mode' : 'Diagnostic Mode'}  
               </h2>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-[0.6rem] text-gray-500 mt-0.5">
               {isResumedMode 
                 ? 'Chat about anything on your mind' 
                 : 'Your messages are private and secure'}
@@ -255,17 +254,17 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
 
       {/* Completion Banner */}
       {showCompletionBanner && (
-        <div className="flex-shrink-0 px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
+        <div className="flex-shrink-0 px-3 py-2 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center">
+              <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle2 className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-green-900">
+                <h3 className="text-xs font-semibold text-green-900">
                   {isResumedMode ? 'Assessment Summary Available' : 'Assessment Complete!'}
                 </h3>
-                <p className="text-xs text-green-700">
+                <p className="text-[0.6rem] text-green-700">
                   {isResumedMode 
                     ? 'Your diagnostic results are ready to view anytime.' 
                     : 'Your diagnostic questionnaire is finished. View your results.'}
@@ -275,7 +274,7 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
             <Button
               onClick={handleViewResults}
               size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="text-xs bg-green-700 hover:bg-green-700 text-white"
             >
               <FileText className="h-4 w-4 mr-2" />
               View Results
@@ -285,7 +284,7 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
       )}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gradient-to-b from-gray-50 to-white">
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 bg-gradient-to-b from-gray-50 to-white">
         {messages.map((msg, i) => (
           <MessageBubble 
             key={msg.id || i} 
@@ -296,8 +295,8 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
         ))}
         {isSending && (
           <div className="flex items-start gap-3 justify-end">
-            <div className="max-w-[70%] rounded-2xl px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+            <div className="max-w-[70%] rounded-xl px-4 py-2 bg-gray-200 text-black flex items-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" />
               <span className="text-sm">Processing video...</span>
             </div>
           </div>
@@ -315,15 +314,15 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
       />
 
       {/* Input Area */}
-      <div className="flex-shrink-0 px-6 py-4 border-t bg-white">
+      <div className="flex-shrink-0 px-4 py-2 border-t bg-white">
         <div className="flex items-center justify-center">
           <Button
             type="button"
             onClick={handleRecordClick}
             disabled={isSending || !canRecord}
-            size="lg"
+            size="sm"
             className={cn(
-              "rounded-full h-14 w-14 transition-all disabled:opacity-50 flex-shrink-0",
+              "rounded-full h-10 w-10 transition-all disabled:opacity-50 flex-shrink-0",
               isRecording 
                 ? "bg-red-500 hover:bg-red-600 animate-pulse" 
                 : "bg-textPrimary hover:from-indigo-700 hover:to-purple-700"
@@ -336,7 +335,7 @@ export function ChatLayout({ sessionId, sessionName }: { sessionId: string; sess
             )}
           </Button>
         </div>
-        <p className="text-xs text-center text-gray-400 mt-3">
+        <p className="text-[0.6rem] text-center text-gray-400 mt-3">
           {isRecording ? 'Click to stop and send' : 
            isResumedMode ? 'Free talk mode - chat about anything' :
            'Click to start recording'}

@@ -65,11 +65,10 @@ export function JournalFilters({
         {/* Mood Filters */}
         <div className="flex flex-wrap gap-2">
           <Button
-            variant={selectedMood === 'All' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setSelectedMood('All')}
             className={cn(
-              'rounded-full',
+              'rounded-full bg-white/10 hover:bg-textPrimary hover:text-white',
               selectedMood === 'All' 
                 ? 'bg-textPrimary hover:bg-textPrimary/90 text-white border-current font-semibold' 
                 : 'border-gray-200'
@@ -85,11 +84,10 @@ export function JournalFilters({
             return (
               <Button
                 key={mood}
-                variant="outline"
                 size="sm"
                 onClick={() => setSelectedMood(mood)}
                 className={cn(
-                  'rounded-full gap-2 border',
+                  'rounded-full gap-2 border bg-white/10 hover:bg-textPrimary hover:text-white',
                   isSelected 
                     ? `${config.bgColor} ${config.color} border-current font-semibold`
                     : 'border-gray-200 hover:border-gray-300'

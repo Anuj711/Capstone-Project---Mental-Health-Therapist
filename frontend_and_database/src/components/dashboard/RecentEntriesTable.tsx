@@ -37,7 +37,7 @@ export function RecentEntriesTable({ entries }: RecentEntriesTableProps) {
     <Card className="lg:col-span-2 shadow-sm">
       <CardHeader className="flex flex-row items-center">
         <div className="grid gap-2">
-          <CardTitle className="text-lg text-gray-700">
+          <CardTitle className="text-md text-gray-700">
             Recent Journal Entries
           </CardTitle>
           <CardDescription className="text-xs">
@@ -47,7 +47,7 @@ export function RecentEntriesTable({ entries }: RecentEntriesTableProps) {
         <Button
           asChild
           size="sm"
-          className="ml-auto gap-1 bg-textPrimary hover:bg-textPrimary/90"
+          className="ml-auto text-xs gap-1 bg-textPrimary hover:bg-textPrimary/90"
         >
           <Link href="/journal" className="text-white">
             View All
@@ -71,7 +71,7 @@ export function RecentEntriesTable({ entries }: RecentEntriesTableProps) {
               entries.map((entry) => (
                 <TableRow key={entry.id}>
                   <TableCell>
-                    <div className="font-medium">
+                    <div className="text-sm font-medium">
                       {entry.mood ? MOOD_ICONS[entry.mood] : null}
                     </div>
                   </TableCell>
@@ -80,7 +80,7 @@ export function RecentEntriesTable({ entries }: RecentEntriesTableProps) {
                       {entry.content}
                     </div>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell text-right">
+                  <TableCell className="hidden md:table-cell text-right text-xs">
                     {entry.createdAt?.seconds
                       ? formatDistanceToNow(
                           new Date(entry.createdAt.seconds * 1000),

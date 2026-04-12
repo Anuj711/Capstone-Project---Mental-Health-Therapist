@@ -17,10 +17,10 @@ export function CTACard() {
         </p>
         <Button
           size="lg"
-          className="w-full bg-textPrimary hover:bg-textPrimary/90"
+          className="w-full bg-textPrimary text-xs hover:bg-textPrimary/90"
           asChild
         >
-          <Link href="/journal" className="text-white">
+          <Link href="/journal" className="text-white ">
             + New Entry
           </Link>
         </Button>

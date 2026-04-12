@@ -4,7 +4,7 @@ import { ChatLayout } from '@/components/chat/chat-layout';
 import { useState, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Session } from '@/lib/definitions';
 import {
   AlertDialog,
@@ -40,42 +40,56 @@ export default function ChatPageClient({
   const { user } = useUser();
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Read session from URL once on mount — passes it into the hook as the initial session
+  const urlSessionId = searchParams.get('session');
+
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [tempSessionName, setTempSessionName] = useState('');
   const [showEndSessionDialog, setShowEndSessionDialog] = useState(false);
-  
-  // Resizable sidebar state
+
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
 
   const {
-    activeSessionId,
-    setActiveSessionId,
+    activeSessionId: activeSessionIdRaw,
+    setActiveSessionId: setSessionIdInHook,
     sessions,
     sessionsLoading,
     activeSession,
-    handleNewSession,
-  } = useSessionManagement();
+    handleNewSession: handleNewSessionInHook,
+  } = useSessionManagement(urlSessionId); // pass URL param into hook
 
   const typedSessions = sessions ? sessions as Session[] : undefined;
 
-  // Handle mouse move for resizing
+  // Wrap setActiveSessionId to also update the URL
+  const setActiveSessionId = (id: string | null) => {
+    setSessionIdInHook(id);
+    if (id) {
+      router.replace(`/chat?session=${id}`, { scroll: false });
+    }
+  };
+
+  // Wrap handleNewSession to also update the URL when a new session is created
+  const handleNewSession = async () => {
+    const newId = await handleNewSessionInHook();
+    if (newId) {
+      router.replace(`/chat?session=${newId}`, { scroll: false });
+    }
+  };
+
+  const activeSessionId = activeSessionIdRaw;
+
+  // Resizable sidebar
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
       const newWidth = e.clientX;
-      
-      // Constrain width between 200px and 600px
-      if (newWidth >= 200 && newWidth <= 600) {
-        setSidebarWidth(newWidth);
-      }
+      if (newWidth >= 200 && newWidth <= 600) setSidebarWidth(newWidth);
     };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
+    const handleMouseUp = () => setIsResizing(false);
 
     if (isResizing) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -86,7 +100,6 @@ export default function ChatPageClient({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     }
-
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -97,9 +110,7 @@ export default function ChatPageClient({
 
   const handleDeleteConfirm = async () => {
     if (!sessionToDelete || !user) return;
-
     const result = await deleteChatSession(user.uid, sessionToDelete);
-
     if (result.success) {
       toast({ title: "Session deleted", description: "The session has been removed." });
       if (activeSessionId === sessionToDelete) {
@@ -112,28 +123,17 @@ export default function ChatPageClient({
     setSessionToDelete(null);
   };
 
-  const handleEndSession = () => {
-    setShowEndSessionDialog(true);
-  };
+  const handleEndSession = () => setShowEndSessionDialog(true);
 
   const handleEndSessionConfirm = async () => {
     if (!user || !activeSessionId) return;
-
     const result = await endSessionManually(user.uid, activeSessionId);
-
     if (result.success) {
-      toast({
-        title: "Session Ended",
-        description: "Your therapy session has been concluded.",
-      });
+      toast({ title: "Session Ended", description: "Your therapy session has been concluded." });
       setShowEndSessionDialog(false);
       router.push(`/session-summary/${activeSessionId}`);
     } else {
-      toast({
-        title: "Error",
-        description: result.message,
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: result.message, variant: 'destructive' });
       setShowEndSessionDialog(false);
     }
   };
@@ -145,34 +145,20 @@ export default function ChatPageClient({
 
   const handleRenameSubmit = async () => {
     if (!editingSessionId || !user) return;
-    
     const trimmedName = tempSessionName.trim();
-    
     if (!trimmedName) {
-      toast({ 
-        title: "Invalid Name", 
-        description: "Session name cannot be empty.",
-        variant: 'destructive' 
-      });
+      toast({ title: "Invalid Name", description: "Session name cannot be empty.", variant: 'destructive' });
       setEditingSessionId(null);
       return;
     }
-    
     const nameExists = typedSessions?.some(
       s => s.id !== editingSessionId && s.name.toLowerCase() === trimmedName.toLowerCase()
     );
-    
     if (nameExists) {
-      toast({ 
-        title: "Name Already Exists", 
-        description: "A session with this name already exists. Please choose a different name.",
-        variant: 'destructive' 
-      });
+      toast({ title: "Name Already Exists", description: "A session with this name already exists.", variant: 'destructive' });
       return;
     }
-
     const result = await renameChatSession(user.uid, editingSessionId, trimmedName);
-
     if (result.success) {
       toast({ title: "Session renamed successfully" });
       setEditingSessionId(null);
@@ -188,24 +174,15 @@ export default function ChatPageClient({
 
   const handleResume = async (sessionId: string) => {
     if (!user) return;
-    
     const result = await resumeSession(user.uid, sessionId);
-    
     if (result.success) {
-      toast({
-        title: 'Session Resumed',
-        description: 'You can now continue your conversation.',
-      });
+      toast({ title: 'Session Resumed', description: 'You can now continue your conversation.' });
       setActiveSessionId(sessionId);
     } else {
-      toast({
-        title: 'Error',
-        description: result.message || 'Failed to resume session',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: result.message || 'Failed to resume session', variant: 'destructive' });
     }
   };
-  
+
   const canDelete = typedSessions ? typedSessions.length > 1 : false;
 
   return (
@@ -219,10 +196,8 @@ export default function ChatPageClient({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button onClick={() => setSessionToDelete(null)} variant="outline">Cancel</Button>
-            <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </Button>
+            <Button onClick={() => setSessionToDelete(null)} className='bg-white/10 text-black border-2 hover:bg-textPrimary hover:text-white'>Cancel</Button>
+            <Button onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">Delete</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -233,54 +208,30 @@ export default function ChatPageClient({
             <DialogTitle>End Therapy Session?</DialogTitle>
             <DialogDescription>
               {activeSession?.status === 'active' && activeSession?.completionPercentage === 100 ? (
-                <>
-                  You've completed all diagnostic questions! Ending now will save your progress and generate your summary.
-                  You can resume this session later for free-talk.
-                </>
+                <>You've completed all diagnostic questions! Ending now will save your progress and generate your summary.</>
               ) : (
-                <>
-                  Are you sure you want to end this session? You haven't completed all diagnostic questions yet.
-                  Your progress will be saved, and you can resume or start a new session anytime.
-                </>
+                <>Are you sure you want to end this session? Your progress will be saved.</>
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowEndSessionDialog(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="default"
-              onClick={handleEndSessionConfirm}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
+            <Button onClick={() => setShowEndSessionDialog(false)} className='bg-white/10 text-black border-2 hover:bg-textPrimary hover:text-white'>Cancel</Button>
+            <Button variant="default" onClick={handleEndSessionConfirm} className="bg-red-600 hover:bg-red-700 text-white">
               End Session
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <div className="h-screen w-full flex overflow-hidden">
-        {/* Left Sidebar - Resizable */}
-        <div 
+      <div className="h-[calc(100vh-20px)] w-full flex overflow-hidden rounded-2xl border border-gray-200 shadow-sm px-3 py-4">
+        {/* Sidebar */}
+        <div
           className="hidden lg:flex flex-col h-full border-r bg-gray-50 overflow-y-auto relative"
-          style={{ 
-            width: `${sidebarWidth}px`, 
-            minWidth: '200px', 
-            maxWidth: '600px',
-            flexShrink: 0 
-          }}
+          style={{ width: `${sidebarWidth}px`, minWidth: '200px', maxWidth: '600px', flexShrink: 0 }}
         >
           <div className="flex-shrink-0 py-4">
-            <SidebarHeader 
-              onEndSession={handleEndSession}
-              sessionStatus={activeSession?.status}
-            />
+            <SidebarHeader onEndSession={handleEndSession} sessionStatus={activeSession?.status} />
           </div>
-          
           <div className="flex-1 min-h-[400px] pb-4">
             <SessionsList
               sessions={typedSessions}
@@ -299,8 +250,6 @@ export default function ChatPageClient({
               onResume={handleResume}
             />
           </div>
-
-          {/* Resize Handle */}
           <div
             className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-indigo-500 bg-transparent transition-colors group z-10"
             onMouseDown={() => setIsResizing(true)}
@@ -312,11 +261,7 @@ export default function ChatPageClient({
         {/* Main Chat Area */}
         <div className="flex-1 h-full overflow-hidden">
           {activeSessionId ? (
-            <ChatLayout 
-              sessionId={activeSessionId} 
-              sessionName={activeSession?.name || ''} 
-              key={activeSessionId} 
-            />
+            <ChatLayout sessionId={activeSessionId} sessionName={activeSession?.name || ''} key={activeSessionId} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <p className="text-gray-500">Loading or creating session...</p>

@@ -14,13 +14,13 @@ export function SidebarHeader({ onEndSession, sessionStatus = 'active' }: Sideba
   const getStatusBadge = () => {
     switch (sessionStatus) {
       case 'active':
-        return <Badge className="bg-green-500 hover:bg-green-600">Active</Badge>;
+        return <Badge className="text-[0.6rem] text-white bg-green-700">Active</Badge>;
       case 'ended-complete':
-        return <Badge className="bg-blue-500 hover:bg-blue-600">Completed</Badge>;
+        return <Badge className="text-[0.6rem] text-white bg-blue-600">Completed</Badge>;
       case 'ended-premature':
-        return <Badge className="bg-orange-500 hover:bg-orange-600">Ended</Badge>;
+        return <Badge className="text-[0.6rem] text-white bg-orange-600">Ended</Badge>;
       case 'resumed':
-        return <Badge className="bg-purple-500 hover:bg-purple-600">Free Talk</Badge>;
+        return <Badge className="text-[0.6rem] text-white bg-textPrimary">Free Talk</Badge>;
       default:
         return null;
     }
@@ -31,17 +31,17 @@ export function SidebarHeader({ onEndSession, sessionStatus = 'active' }: Sideba
   return (
     <div className="space-y-4 px-2">
       <Card className="border-gray-200">
-        <CardHeader className="text-center pb-4">
-          <div className="flex justify-center mb-3">
-            <Avatar className="h-10 w-10 border-4 border-indigo-100">
+        <CardHeader className="text-center py-2">
+          <div className="flex justify-center mb-2">
+            <Avatar className="h-8 w-8 border-2 border-indigo-100">
               <AvatarImage src="/bot.png" alt="AI Therapist" className="object-cover" />
               <AvatarFallback className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-                <Sparkles className="h-10 w-10"/>
+                <Sparkles className="h-8 w-"/>
               </AvatarFallback>
             </Avatar>
           </div>
-          <CardTitle className="text-sm font-semibold">Your AI Therapist</CardTitle>
-          <CardDescription className="text-xs">Always here to listen and support you</CardDescription>
+          <CardTitle className="text-xs font-semibold">Your AI Therapist</CardTitle>
+          <CardDescription className="text-[0.6rem]">Always here to listen and support you</CardDescription>
           <div className="flex justify-center mt-2">
             {getStatusBadge()}
           </div>
@@ -51,15 +51,15 @@ export function SidebarHeader({ onEndSession, sessionStatus = 'active' }: Sideba
       {canEndSession && (
         <Card className="border-gray-200">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-gray-700">Session Control</CardTitle>
+            <CardTitle className="text-xs font-semibold text-gray-700">Session Control</CardTitle>
           </CardHeader>
-          <div className="px-6 pb-6">
+          <div className="px-4 pb-4">
             <Button 
               onClick={onEndSession}
               variant="destructive" 
-              className="w-full bg-red-600 hover:bg-red-500"
+              className="text-[0.6rem] w-full bg-red-600 hover:bg-red-500"
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut />
               End Session
             </Button>
           </div>
