@@ -117,7 +117,7 @@ export function SignupForm() {
       </p>
 
       <p className="text-xs text-center pt-2 text-gray-600 leading-relaxed">
-        By creating an account, you agree to our Terms of Service and Privacy Policy. 
+        NOTE: By creating an account, you consent to your audio, video, and private transcription data being shared with us. This information will NOT be shared to any third parties without your consent, EVER. 
       </p>
               
     </form>
