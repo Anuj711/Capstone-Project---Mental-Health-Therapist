@@ -62,7 +62,7 @@ export default function Home() {
       <header className="flex items-center justify-between mb-12 ">
         <nav className="flex items-center gap-8 text-sm font-bold">
           <Link href="/" className="hover:underline">Home</Link>
-          <Link href="/about" className="hover:underline">About</Link>
+          <Link href="#about-section" className="hover:underline">About</Link>
         </nav>
         <div className="flex items-center gap-4">
           <Link href="/signup"className="inline-block bg-textSecondary text-white px-6 py-2 shadow-lg
@@ -126,7 +126,7 @@ export default function Home() {
           </p>
         </div>  
 
-      <section className="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] 
+      <section id="about-section" className="w-screen relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] 
       bg-background py-20 mt-16 flex px-6">
         <div className="w-full max-w-7xl mx-auto">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
